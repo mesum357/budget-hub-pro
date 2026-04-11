@@ -1,7 +1,6 @@
-import { LayoutDashboard, Users, Wallet, Receipt, BarChart3, LogOut } from "lucide-react";
+import { LayoutDashboard, Receipt, BarChart3, Wallet, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
 import {
   Sidebar,
   SidebarContent,
@@ -14,16 +13,16 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/context/AuthContext";
 
 const navItems = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Users", url: "/users", icon: Users },
-  { title: "Budgets", url: "/budgets", icon: Wallet },
-  { title: "Spendings", url: "/spendings", icon: Receipt },
-  { title: "Analytics", url: "/analytics", icon: BarChart3 },
+  { title: "Dashboard", url: "/sub/dashboard", icon: LayoutDashboard },
+  { title: "Spending", url: "/sub/spending", icon: Receipt },
+  { title: "Analytics", url: "/sub/analytics", icon: BarChart3 },
+  { title: "Wallet", url: "/sub/wallet", icon: Wallet },
 ];
 
-export function AppSidebar() {
+export function SubAppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
@@ -46,7 +45,7 @@ export function AppSidebar() {
                 <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
                   <Wallet className="h-4 w-4 text-primary-foreground" />
                 </div>
-                <span className="font-bold text-base text-foreground">BudgetMS</span>
+                <span className="font-bold text-base text-foreground">Sub Admin</span>
               </div>
             ) : (
               <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center mx-auto">
@@ -58,11 +57,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.pathname === item.url}
-                    tooltip={item.title}
-                  >
+                  <SidebarMenuButton asChild isActive={location.pathname === item.url} tooltip={item.title}>
                     <NavLink
                       to={item.url}
                       end

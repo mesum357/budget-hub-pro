@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Wallet, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -17,6 +18,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { me, loading: authLoading, setFromLogin } = useAuth();
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (me?.role === "admin") navigate("/dashboard", { replace: true });
+    else if (me?.role === "subadmin") navigate("/sub/dashboard", { replace: true });
+  }, [authLoading, me, navigate]);
 
   const validate = () => {
     const e: typeof errors = {};
@@ -32,11 +40,43 @@ export default function LoginPage() {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setLoading(false);
-    toast({ title: "Welcome back!", description: "Login successful." });
-    navigate("/dashboard");
+    try {
+      const r = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email: email.trim(), password, remember }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        toast({
+          title: "Sign in failed",
+          description: data.error || "Invalid credentials",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (data.role === "admin") {
+        setFromLogin({ role: "admin" });
+        toast({ title: "Welcome back!", description: "Signed in as administrator." });
+        navigate("/dashboard");
+      } else if (data.role === "subadmin" && data.user) {
+        setFromLogin({ role: "subadmin", user: data.user });
+        toast({ title: "Welcome!", description: `Signed in as ${data.user.name}.` });
+        navigate("/sub/dashboard");
+      }
+    } catch {
+      toast({ title: "Network error", description: "Could not reach the server.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">Loading…</div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
@@ -51,7 +91,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground">Budget Management</h1>
-            <p className="text-sm text-muted-foreground mt-1">Sign in to your admin account</p>
+            <p className="text-sm text-muted-foreground mt-1">Sign in as admin or sub-admin</p>
           </div>
         </CardHeader>
         <CardContent>
@@ -92,9 +132,13 @@ export default function LoginPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Checkbox id="remember" checked={remember} onCheckedChange={(c) => setRemember(!!c)} />
-                <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">Remember me</Label>
+                <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
+                  Remember me
+                </Label>
               </div>
-              <button type="button" className="text-sm text-primary hover:underline">Forgot password?</button>
+              <button type="button" className="text-sm text-primary hover:underline">
+                Forgot password?
+              </button>
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Signing in..." : "Sign In"}

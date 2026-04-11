@@ -1,28 +1,135 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { initialUsers, User } from "@/data/mockData";
-import { Plus, Search, Upload, X } from "lucide-react";
+import type { UserListItem } from "@/data/mockData";
+import { Plus, Search, Upload, X, FileText, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { formatPkr, formatPkrAxis } from "@/lib/currency";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+
+type ProfilePayload = {
+  user: UserListItem & { allottedBudget: number; walletBalance: number };
+  spendingHistory: {
+    id: string;
+    amount: number;
+    reason: string;
+    date: string;
+    status: string;
+    category: string;
+    attachment?: string;
+  }[];
+  monthly: { monthKey: string; monthLabel: string; allotted: number; spent: number }[];
+};
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>(initialUsers);
+  const [users, setUsers] = useState<UserListItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", role: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "",
+    allottedBudget: "5000",
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const filtered = users.filter((u) =>
-    u.name.toLowerCase().includes(search.toLowerCase()) || u.role.toLowerCase().includes(search.toLowerCase())
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profile, setProfile] = useState<ProfilePayload | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    email: "",
+    role: "",
+    status: "active" as "active" | "inactive",
+    allottedBudget: "",
+    password: "",
+  });
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const [editClearAvatar, setEditClearAvatar] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserListItem | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/admin/users", { credentials: "include" });
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+      setUsers(data);
+    } catch {
+      toast({ title: "Could not load users", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const openProfile = async (userId: string) => {
+    setProfileOpen(true);
+    setProfile(null);
+    setProfileLoading(true);
+    try {
+      const r = await fetch(`/api/admin/users/${userId}/profile`, { credentials: "include" });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        toast({ title: "Could not load profile", description: data.error, variant: "destructive" });
+        setProfileOpen(false);
+        return;
+      }
+      setProfile(data as ProfilePayload);
+    } catch {
+      toast({ title: "Could not load profile", variant: "destructive" });
+      setProfileOpen(false);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const filtered = users.filter(
+    (u) =>
+      u.name.toLowerCase().includes(search.toLowerCase()) || u.role.toLowerCase().includes(search.toLowerCase()),
   );
 
   const validate = () => {
@@ -30,27 +137,44 @@ export default function UsersPage() {
     if (!form.name.trim()) e.name = "Name is required";
     if (!form.email.trim()) e.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Invalid email";
-    if (!form.role) e.role = "Role is required";
+    if (!form.password || form.password.length < 6) e.password = "Password (min 6 characters) is required";
+    if (!form.role.trim()) e.role = "Role is required";
+    const allot = Number(form.allottedBudget);
+    if (!Number.isFinite(allot) || allot < 0) e.allottedBudget = "Enter a valid allotted budget";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!validate()) return;
-    const newUser: User = {
-      id: String(Date.now()),
-      name: form.name.trim(),
-      email: form.email.trim(),
-      role: form.role,
-      status: "active",
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setUsers([newUser, ...users]);
-    setForm({ name: "", email: "", role: "" });
-    setImagePreview(null);
-    setErrors({});
-    setOpen(false);
-    toast({ title: "User created", description: `${newUser.name} has been added.` });
+    try {
+      const r = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          password: form.password,
+          role: form.role.trim(),
+          allottedBudget: Number(form.allottedBudget),
+          avatar: imagePreview || undefined,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        toast({ title: "Create failed", description: data.error || "Try again", variant: "destructive" });
+        return;
+      }
+      setForm({ name: "", email: "", password: "", role: "", allottedBudget: "5000" });
+      setImagePreview(null);
+      setErrors({});
+      setOpen(false);
+      await load();
+      toast({ title: "User created", description: `${data.name} can sign in to the sub-admin portal.` });
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    }
   };
 
   const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,6 +184,122 @@ export default function UsersPage() {
       reader.onloadend = () => setImagePreview(reader.result as string);
       reader.readAsDataURL(file);
     }
+  };
+
+  const openEdit = (user: UserListItem) => {
+    setEditingUser(user);
+    setEditForm({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      allottedBudget: String(user.allottedBudget ?? 0),
+      password: "",
+    });
+    setEditImagePreview(null);
+    setEditClearAvatar(false);
+    setEditErrors({});
+    setEditOpen(true);
+  };
+
+  const handleEditImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditImagePreview(reader.result as string);
+        setEditClearAvatar(false);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const validateEdit = () => {
+    const e: Record<string, string> = {};
+    if (!editForm.name.trim()) e.name = "Name is required";
+    if (!editForm.email.trim()) e.email = "Email is required";
+    else if (!/\S+@\S+\.\S+/.test(editForm.email)) e.email = "Invalid email";
+    if (!editForm.role.trim()) e.role = "Role is required";
+    const allot = Number(editForm.allottedBudget);
+    if (!Number.isFinite(allot) || allot < 0) e.allottedBudget = "Enter a valid allotted budget";
+    if (editForm.password && editForm.password.length < 6) e.password = "Min 6 characters if changing password";
+    setEditErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleEditSave = async () => {
+    if (!editingUser || !validateEdit()) return;
+    const userId = editingUser.id;
+    setEditSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        name: editForm.name.trim(),
+        email: editForm.email.trim(),
+        role: editForm.role.trim(),
+        status: editForm.status,
+        allottedBudget: Number(editForm.allottedBudget),
+      };
+      if (editForm.password.trim()) body.password = editForm.password;
+      if (editImagePreview) body.avatar = editImagePreview;
+      else if (editClearAvatar) body.avatar = null;
+
+      const r = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        toast({ title: "Update failed", description: data.error || "Try again", variant: "destructive" });
+        return;
+      }
+      setEditOpen(false);
+      setEditingUser(null);
+      await load();
+      toast({ title: "User updated", description: `${data.name} was saved.` });
+      if (profileOpen && profile?.user.id === userId) {
+        await openProfile(userId);
+      }
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    setDeleteBusy(true);
+    try {
+      const r = await fetch(`/api/admin/users/${userToDelete.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        toast({ title: "Delete failed", description: data.error || "Try again", variant: "destructive" });
+        return;
+      }
+      if (profileOpen && profile?.user.id === userToDelete.id) {
+        setProfileOpen(false);
+        setProfile(null);
+      }
+      setDeleteOpen(false);
+      setUserToDelete(null);
+      await load();
+      toast({ title: "User deleted", description: `${userToDelete.name} was removed.` });
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const statusColors: Record<string, string> = {
+    approved: "bg-success/10 text-success border-0",
+    pending: "bg-warning/10 text-warning border-0",
+    rejected: "bg-destructive/10 text-destructive border-0",
   };
 
   return (
@@ -72,11 +312,14 @@ export default function UsersPage() {
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-2" />Create User</Button>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Create User
+              </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New User</DialogTitle>
+                <DialogTitle>Create Sub-Admin</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="flex justify-center">
@@ -85,7 +328,14 @@ export default function UsersPage() {
                     {imagePreview ? (
                       <div className="relative">
                         <img src={imagePreview} alt="Preview" className="h-20 w-20 rounded-full object-cover" />
-                        <button onClick={(e) => { e.preventDefault(); setImagePreview(null); }} className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setImagePreview(null);
+                          }}
+                          className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive flex items-center justify-center"
+                        >
                           <X className="h-3 w-3 text-destructive-foreground" />
                         </button>
                       </div>
@@ -98,62 +348,457 @@ export default function UsersPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Full Name</Label>
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="John Doe" className={errors.name ? "border-destructive" : ""} />
+                  <Input
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="John Doe"
+                    className={errors.name ? "border-destructive" : ""}
+                  />
                   {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="john@company.com" className={errors.email ? "border-destructive" : ""} />
+                  <Label>Email (login)</Label>
+                  <Input
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    placeholder="john@company.com"
+                    className={errors.email ? "border-destructive" : ""}
+                  />
                   {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
                 </div>
                 <div className="space-y-2">
+                  <Label>Password</Label>
+                  <Input
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder="At least 6 characters"
+                    className={errors.password ? "border-destructive" : ""}
+                  />
+                  {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+                </div>
+                <div className="space-y-2">
                   <Label>Role</Label>
-                  <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                    <SelectTrigger className={errors.role ? "border-destructive" : ""}><SelectValue placeholder="Select role" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Manager">Manager</SelectItem>
-                      <SelectItem value="Analyst">Analyst</SelectItem>
-                      <SelectItem value="Developer">Developer</SelectItem>
-                      <SelectItem value="Designer">Designer</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    value={form.role}
+                    onChange={(e) => setForm({ ...form, role: e.target.value })}
+                    placeholder="e.g. Manager, Analyst"
+                    className={errors.role ? "border-destructive" : ""}
+                  />
                   {errors.role && <p className="text-xs text-destructive">{errors.role}</p>}
                 </div>
-                <Button onClick={handleCreate} className="w-full">Create User</Button>
+                <div className="space-y-2">
+                  <Label>Allotted budget (PKR)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.allottedBudget}
+                    onChange={(e) => setForm({ ...form, allottedBudget: e.target.value })}
+                    className={errors.allottedBudget ? "border-destructive" : ""}
+                  />
+                  {errors.allottedBudget && <p className="text-xs text-destructive">{errors.allottedBudget}</p>}
+                </div>
+                <Button onClick={handleCreate} className="w-full">
+                  Create User
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((user) => (
-            <Card key={user.id} className="shadow-sm hover:shadow-md transition-shadow animate-fade-in">
-              <CardContent className="p-5">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-11 w-11">
-                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                      {user.name.split(" ").map((n) => n[0]).join("")}
+        <Dialog
+          open={editOpen}
+          onOpenChange={(o) => {
+            setEditOpen(o);
+            if (!o) setEditingUser(null);
+          }}
+        >
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit sub-admin</DialogTitle>
+            </DialogHeader>
+            {editingUser && (
+              <div className="space-y-4 pt-2">
+                <div className="flex flex-col items-center gap-2">
+                  <label className="cursor-pointer group">
+                    <input type="file" accept="image/*" className="hidden" onChange={handleEditImage} />
+                    {editImagePreview ? (
+                      <div className="relative">
+                        <img src={editImagePreview} alt="" className="h-20 w-20 rounded-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setEditImagePreview(null);
+                          }}
+                          className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive flex items-center justify-center"
+                        >
+                          <X className="h-3 w-3 text-destructive-foreground" />
+                        </button>
+                      </div>
+                    ) : editClearAvatar || !editingUser.avatar ? (
+                      <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center group-hover:bg-muted/70 transition-colors">
+                        <Upload className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <img src={editingUser.avatar} alt="" className="h-20 w-20 rounded-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setEditClearAvatar(true);
+                          }}
+                          className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive flex items-center justify-center"
+                          title="Remove photo"
+                        >
+                          <X className="h-3 w-3 text-destructive-foreground" />
+                        </button>
+                      </div>
+                    )}
+                  </label>
+                  {editClearAvatar && !editImagePreview && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-8"
+                      onClick={() => setEditClearAvatar(false)}
+                    >
+                      Undo remove photo
+                    </Button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>Full name</Label>
+                  <Input
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    className={editErrors.name ? "border-destructive" : ""}
+                  />
+                  {editErrors.name && <p className="text-xs text-destructive">{editErrors.name}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Email (login)</Label>
+                  <Input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className={editErrors.email ? "border-destructive" : ""}
+                  />
+                  {editErrors.email && <p className="text-xs text-destructive">{editErrors.email}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>New password</Label>
+                  <Input
+                    type="password"
+                    value={editForm.password}
+                    onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                    placeholder="Leave blank to keep current"
+                    className={editErrors.password ? "border-destructive" : ""}
+                  />
+                  {editErrors.password && <p className="text-xs text-destructive">{editErrors.password}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Input
+                    value={editForm.role}
+                    onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                    className={editErrors.role ? "border-destructive" : ""}
+                  />
+                  {editErrors.role && <p className="text-xs text-destructive">{editErrors.role}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select
+                    value={editForm.status}
+                    onValueChange={(v) => setEditForm({ ...editForm, status: v as "active" | "inactive" })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Allotted budget (PKR)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={editForm.allottedBudget}
+                    onChange={(e) => setEditForm({ ...editForm, allottedBudget: e.target.value })}
+                    className={editErrors.allottedBudget ? "border-destructive" : ""}
+                  />
+                  {editErrors.allottedBudget && <p className="text-xs text-destructive">{editErrors.allottedBudget}</p>}
+                </div>
+                <div className="flex gap-2 justify-end pt-2">
+                  <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="button" onClick={handleEditSave} disabled={editSaving}>
+                    {editSaving ? "Saving…" : "Save changes"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete user?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {userToDelete ? (
+                  <>
+                    This will permanently remove <span className="font-medium text-foreground">{userToDelete.name}</span> and all of
+                    their receipts, wallet top-ups, and allotment history. This cannot be undone.
+                  </>
+                ) : null}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteBusy}>Cancel</AlertDialogCancel>
+              <Button variant="destructive" disabled={deleteBusy} onClick={handleConfirmDelete}>
+                {deleteBusy ? "Deleting…" : "Delete"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Dialog
+          open={profileOpen}
+          onOpenChange={(o) => {
+            setProfileOpen(o);
+            if (!o) setProfile(null);
+          }}
+        >
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>User profile</DialogTitle>
+            </DialogHeader>
+            {profileLoading && <p className="text-sm text-muted-foreground py-6">Loading profile…</p>}
+            {!profileLoading && profile && (
+              <div className="space-y-6 pt-2">
+                <div className="flex flex-col sm:flex-row gap-4 items-start">
+                  <Avatar className="h-20 w-20 rounded-xl">
+                    {profile.user.avatar ? <AvatarImage src={profile.user.avatar} alt="" /> : null}
+                    <AvatarFallback className="rounded-xl bg-primary/10 text-primary text-lg font-semibold">
+                      {profile.user.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-foreground truncate">{user.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <h2 className="text-xl font-semibold text-foreground">{profile.user.name}</h2>
+                    <p className="text-sm text-muted-foreground">{profile.user.email}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="secondary">{profile.user.role}</Badge>
+                      <Badge variant={profile.user.status === "active" ? "default" : "secondary"}>
+                        {profile.user.status}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground self-center">Joined {profile.user.createdAt}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-4 text-sm pt-1">
+                      <span>
+                        <span className="text-muted-foreground">Wallet: </span>
+                        <span className="font-semibold">{formatPkr(profile.user.walletBalance)}</span>
+                      </span>
+                      <span>
+                        <span className="text-muted-foreground">Allotted (cap): </span>
+                        <span className="font-semibold">{formatPkr(profile.user.allottedBudget)}</span>
+                      </span>
+                    </div>
                   </div>
-                  <Badge variant={user.status === "active" ? "default" : "secondary"} className={user.status === "active" ? "bg-success/10 text-success border-0" : ""}>
-                    {user.status}
-                  </Badge>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{user.role}</span>
-                  <span>Joined {user.createdAt}</span>
+
+                <Separator />
+
+                <div>
+                  <h3 className="text-sm font-medium text-foreground mb-3">Budget vs spending by month</h3>
+                  <div className="h-64 w-full min-w-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={profile.monthly} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                        <XAxis
+                          dataKey="monthLabel"
+                          tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                          angle={-30}
+                          textAnchor="end"
+                          height={56}
+                          interval={0}
+                        />
+                        <YAxis
+                          tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                          tickFormatter={(v) => formatPkrAxis(Number(v))}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "8px",
+                          }}
+                          formatter={(v: number) => [formatPkr(Number(v)), ""]}
+                        />
+                        <Legend />
+                        <Bar dataKey="allotted" name="Allotted (change)" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="spent" name="Spent" fill="hsl(var(--chart-1))" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-          {filtered.length === 0 && (
-            <div className="col-span-full text-center py-12 text-muted-foreground">No users found.</div>
-          )}
-        </div>
+
+                <Separator />
+
+                <div>
+                  <h3 className="text-sm font-medium text-foreground mb-2">Spending history</h3>
+                  <ScrollArea className="h-[min(320px,40vh)] rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Reason</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Attachment</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {profile.spendingHistory.map((row) => (
+                          <TableRow key={row.id}>
+                            <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{row.date}</TableCell>
+                            <TableCell className="font-semibold">{formatPkr(row.amount)}</TableCell>
+                            <TableCell className="max-w-[180px] truncate">{row.reason}</TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="border-0 text-xs">
+                                {row.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className={`border-0 ${statusColors[row.status] ?? ""}`}>
+                                {row.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {row.attachment ? (
+                                <a
+                                  href={`/uploads/${encodeURIComponent(row.attachment)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-primary text-xs hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <FileText className="h-3.5 w-3.5" />
+                                  View
+                                </a>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">—</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {profile.spendingHistory.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
+                              No receipts yet.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Loading users…</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map((user) => (
+              <Card
+                key={user.id}
+                role="button"
+                tabIndex={0}
+                className="shadow-sm hover:shadow-md hover:border-primary/30 transition-all animate-fade-in cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => openProfile(user.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openProfile(user.id);
+                  }
+                }}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-11 w-11">
+                      {user.avatar ? <AvatarImage src={user.avatar} alt="" /> : null}
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                        {user.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-foreground truncate">{user.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                    </div>
+                    <Badge
+                      variant={user.status === "active" ? "default" : "secondary"}
+                      className={user.status === "active" ? "bg-success/10 text-success border-0" : ""}
+                    >
+                      {user.status}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{user.role}</span>
+                    <span>Joined {user.createdAt}</span>
+                  </div>
+                  <div
+                    className="mt-3 flex items-center justify-end gap-1 border-t pt-3 -mx-1"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      aria-label="Edit user"
+                      onClick={() => openEdit(user)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      aria-label="Delete user"
+                      onClick={() => {
+                        setUserToDelete(user);
+                        setDeleteOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {filtered.length === 0 && (
+              <div className="col-span-full text-center py-12 text-muted-foreground">No users found.</div>
+            )}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

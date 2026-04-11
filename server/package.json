@@ -1,0 +1,10 @@
+{
+  "name": "budget-hub-server",
+  "private": true,
+  "type": "module",
+  "description": "API only — run commands from this directory so npm targets this package (not the Vite app in the repo root).",
+  "scripts": {
+    "dev": "node index.js",
+    "start": "node index.js"
+  }
+}

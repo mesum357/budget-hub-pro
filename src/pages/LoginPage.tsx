@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { apiUrl } from "@/lib/apiBase";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -41,7 +42,7 @@ export default function LoginPage() {
     if (!validate()) return;
     setLoading(true);
     try {
-      const r = await fetch("/api/auth/login", {
+      const r = await fetch(apiUrl("/api/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { apiUrl } from "@/lib/apiBase";
 
 export type MeState =
   | { role: "admin" }
@@ -20,7 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const r = await fetch("/api/auth/me", { credentials: "include" });
+    const r = await fetch(apiUrl("/api/auth/me"), { credentials: "include" });
     const data = await r.json();
     if (!data?.role) setMe(null);
     else if (data.role === "admin") setMe({ role: "admin" });
@@ -43,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" });
     setMe(null);
   }, []);
 

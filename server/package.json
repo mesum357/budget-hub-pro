@@ -2,9 +2,22 @@
   "name": "budget-hub-server",
   "private": true,
   "type": "module",
-  "description": "API only — run commands from this directory so npm targets this package (not the Vite app in the repo root).",
+  "description": "Budget Hub API — use this package.json as the root of Budget-Management-Backend on Render (with index.js, models.js alongside).",
   "scripts": {
-    "dev": "node index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "connect-mongo": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "mongoose": "^9.4.1",
+    "multer": "^2.1.1"
   }
 }

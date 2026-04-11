@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import type { MonthlyPoint } from "@/data/mockData";
 import { formatPkr, formatPkrAxis } from "@/lib/currency";
+import { apiUrl } from "@/lib/apiBase";
 
 type SubDashboard = {
   allottedBudget: number;
@@ -25,7 +26,7 @@ export default function SubDashboardPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/sub/dashboard", { credentials: "include" });
+      const r = await fetch(apiUrl("/api/sub/dashboard"), { credentials: "include" });
       if (!r.ok) throw new Error();
       setData(await r.json());
     } catch {

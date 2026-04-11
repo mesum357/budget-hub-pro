@@ -24,6 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { formatPkr, formatPkrAxis } from "@/lib/currency";
+import { apiUrl } from "@/lib/apiBase";
 import {
   BarChart,
   Bar,
@@ -91,7 +92,7 @@ export default function UsersPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/admin/users", { credentials: "include" });
+      const r = await fetch(apiUrl("/api/admin/users"), { credentials: "include" });
       if (!r.ok) throw new Error();
       const data = await r.json();
       setUsers(data);
@@ -111,7 +112,7 @@ export default function UsersPage() {
     setProfile(null);
     setProfileLoading(true);
     try {
-      const r = await fetch(`/api/admin/users/${userId}/profile`, { credentials: "include" });
+      const r = await fetch(apiUrl(`/api/admin/users/${userId}/profile`), { credentials: "include" });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
         toast({ title: "Could not load profile", description: data.error, variant: "destructive" });
@@ -148,7 +149,7 @@ export default function UsersPage() {
   const handleCreate = async () => {
     if (!validate()) return;
     try {
-      const r = await fetch("/api/admin/users", {
+      const r = await fetch(apiUrl("/api/admin/users"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -243,7 +244,7 @@ export default function UsersPage() {
       if (editImagePreview) body.avatar = editImagePreview;
       else if (editClearAvatar) body.avatar = null;
 
-      const r = await fetch(`/api/admin/users/${userId}`, {
+      const r = await fetch(apiUrl(`/api/admin/users/${userId}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -272,7 +273,7 @@ export default function UsersPage() {
     if (!userToDelete) return;
     setDeleteBusy(true);
     try {
-      const r = await fetch(`/api/admin/users/${userToDelete.id}`, {
+      const r = await fetch(apiUrl(`/api/admin/users/${userToDelete.id}`), {
         method: "DELETE",
         credentials: "include",
       });
@@ -687,7 +688,7 @@ export default function UsersPage() {
                             <TableCell>
                               {row.attachment ? (
                                 <a
-                                  href={`/uploads/${encodeURIComponent(row.attachment)}`}
+                                  href={apiUrl(`/uploads/${encodeURIComponent(row.attachment)}`)}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="inline-flex items-center gap-1 text-primary text-xs hover:underline"

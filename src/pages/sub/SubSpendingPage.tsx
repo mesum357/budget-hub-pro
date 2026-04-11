@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatPkr } from "@/lib/currency";
+import { apiUrl } from "@/lib/apiBase";
 
 export default function SubSpendingPage() {
   const [rows, setRows] = useState<SpendingReceipt[]>([]);
@@ -27,7 +28,7 @@ export default function SubSpendingPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/sub/receipts", { credentials: "include" });
+      const r = await fetch(apiUrl("/api/sub/receipts"), { credentials: "include" });
       if (!r.ok) throw new Error();
       const data = await r.json();
       setRows(
@@ -77,7 +78,7 @@ export default function SubSpendingPage() {
       fd.append("reason", reason.trim());
       fd.append("date", date);
       if (file) fd.append("attachment", file);
-      const r = await fetch("/api/sub/receipts", { method: "POST", body: fd, credentials: "include" });
+      const r = await fetch(apiUrl("/api/sub/receipts"), { method: "POST", body: fd, credentials: "include" });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
         toast({ title: "Could not submit", description: data.error || "Try again", variant: "destructive" });
@@ -178,7 +179,7 @@ export default function SubSpendingPage() {
                       <TableCell>
                         {s.attachment ? (
                           <a
-                            href={`/uploads/${encodeURIComponent(s.attachment)}`}
+                            href={apiUrl(`/uploads/${encodeURIComponent(s.attachment)}`)}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 text-primary text-sm hover:underline"

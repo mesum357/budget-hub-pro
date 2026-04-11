@@ -21,6 +21,7 @@ import {
 } from "recharts";
 import type { MonthlyPoint } from "@/data/mockData";
 import { formatPkr, formatPkrAxis } from "@/lib/currency";
+import { apiUrl } from "@/lib/apiBase";
 
 const COLORS = [
   "hsl(var(--chart-1))",
@@ -48,7 +49,7 @@ export default function AnalyticsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/admin/analytics", { credentials: "include" });
+      const r = await fetch(apiUrl("/api/admin/analytics"), { credentials: "include" });
       if (!r.ok) throw new Error();
       setData(await r.json());
     } catch {

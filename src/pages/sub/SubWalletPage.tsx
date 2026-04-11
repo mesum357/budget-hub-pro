@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { formatPkr } from "@/lib/currency";
+import { apiUrl } from "@/lib/apiBase";
 import { format } from "date-fns";
 
 type TopRow = { id: string; amount: number; note: string; createdAt: string };
@@ -18,7 +19,7 @@ export default function SubWalletPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/sub/wallet", { credentials: "include" });
+      const r = await fetch(apiUrl("/api/sub/wallet"), { credentials: "include" });
       if (!r.ok) throw new Error();
       const data = await r.json();
       setBalance(data.balance);

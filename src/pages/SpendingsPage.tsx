@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { formatPkr } from "@/lib/currency";
+import { apiUrl } from "@/lib/apiBase";
 
 export default function SpendingsPage() {
   const [spendings, setSpendings] = useState<SpendingReceipt[]>([]);
@@ -22,7 +23,7 @@ export default function SpendingsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/admin/receipts", { credentials: "include" });
+      const r = await fetch(apiUrl("/api/admin/receipts"), { credentials: "include" });
       if (!r.ok) throw new Error();
       setSpendings(await r.json());
     } catch {
@@ -54,7 +55,7 @@ export default function SpendingsPage() {
 
   const updateStatus = async (id: string, status: "approved" | "rejected") => {
     try {
-      const r = await fetch(`/api/admin/receipts/${id}`, {
+      const r = await fetch(apiUrl(`/api/admin/receipts/${id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -155,7 +156,7 @@ export default function SpendingsPage() {
                       <TableCell>
                         {s.attachment ? (
                           <a
-                            href={`/uploads/${encodeURIComponent(s.attachment)}`}
+                            href={apiUrl(`/uploads/${encodeURIComponent(s.attachment)}`)}
                             target="_blank"
                             rel="noreferrer"
                             className="flex items-center gap-1 text-primary text-sm hover:underline"

@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { formatPkr } from "@/lib/currency";
+import { apiUrl } from "@/lib/apiBase";
 
 export default function BudgetsPage() {
   const [budgets, setBudgets] = useState<BudgetRecord[]>([]);
@@ -26,7 +27,7 @@ export default function BudgetsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/admin/budgets", { credentials: "include" });
+      const r = await fetch(apiUrl("/api/admin/budgets"), { credentials: "include" });
       if (!r.ok) throw new Error();
       const data = await r.json();
       setBudgets(data);
@@ -49,7 +50,7 @@ export default function BudgetsPage() {
       return;
     }
     try {
-      const r = await fetch(`/api/admin/users/${topUpTarget.userId}/topup`, {
+      const r = await fetch(apiUrl(`/api/admin/users/${topUpTarget.userId}/topup`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

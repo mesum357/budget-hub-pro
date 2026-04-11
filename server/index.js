@@ -279,6 +279,7 @@ async function main() {
   await backfillMissingAllotmentChanges();
 
   const app = express();
+  app.set("trust proxy", 1);
 
   /** Collect allowed browser origins (comma-separated in each var). */
   function parseOriginList() {
@@ -337,21 +338,68 @@ async function main() {
   app.use(express.json({ limit: "6mb" }));
   app.use("/uploads", express.static(UPLOAD_DIR));
 
+  /**
+   * SPA on another host (e.g. two Render URLs) needs SameSite=None; Secure or the session cookie
+   * is not sent on fetch(..., { credentials: "include" }) → every /api/admin/* returns 401.
+   * SESSION_SAME_SITE=lax forces Lax. SESSION_SAME_SITE=none forces cross-site.
+   * On Render, if unset, we enable cross-site cookies when RENDER_EXTERNAL_URL and a deployed https frontend differ.
+   */
+  function useCrossSiteSessionCookie() {
+    const explicit = process.env.SESSION_SAME_SITE?.trim().toLowerCase();
+    if (explicit === "lax") return false;
+    if (explicit === "none") return true;
+    if (process.env.RENDER !== "true") return false;
+    const backendUrl = process.env.RENDER_EXTERNAL_URL?.trim();
+    if (!backendUrl) return false;
+
+    let feOrigin = null;
+    for (const o of parseOriginList()) {
+      if (o.startsWith("https://") && !/localhost|127\.0\.0\.1/i.test(o)) {
+        try {
+          feOrigin = new URL(o).origin;
+          break;
+        } catch {
+          /* skip */
+        }
+      }
+    }
+    if (!feOrigin) {
+      const raw = (process.env.FRONTEND_URL || process.env.WEB_APP_URL || "").split(",")[0]?.trim();
+      if (raw) {
+        try {
+          feOrigin = new URL(raw).origin;
+        } catch {
+          /* skip */
+        }
+      }
+    }
+    if (!feOrigin) return false;
+    try {
+      const beOrigin = new URL(backendUrl).origin;
+      return feOrigin !== beOrigin;
+    } catch {
+      return false;
+    }
+  }
+
+  const crossSiteSession = useCrossSiteSessionCookie();
+  if (crossSiteSession) {
+    console.log("[session] SameSite=None; Secure (cross-origin SPA ↔ API)");
+  }
+
   app.use(
     session({
       secret: SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
+      proxy: true,
       store: MongoStore.create({ mongoUrl: MONGODB_URI, ttl: 60 * 60 * 24 * 7 }),
-      cookie: (() => {
-        const crossSite = process.env.SESSION_SAME_SITE === "none";
-        return {
-          httpOnly: true,
-          sameSite: crossSite ? "none" : "lax",
-          secure: crossSite ? true : process.env.COOKIE_SECURE === "1",
-          maxAge: 7 * 24 * 60 * 60 * 1000,
-        };
-      })(),
+      cookie: {
+        httpOnly: true,
+        sameSite: crossSiteSession ? "none" : "lax",
+        secure: crossSiteSession ? true : process.env.COOKIE_SECURE === "1",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      },
     }),
   );
 

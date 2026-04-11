@@ -279,16 +279,30 @@ async function main() {
   await backfillMissingAllotmentChanges();
 
   const app = express();
-  /** If CORS_ORIGIN is unset, allow any http(s)://localhost or 127.0.0.1 port (Vite may use 8081, etc.). */
+
+  /** Collect allowed browser origins (comma-separated). Use FRONTEND_URL for your deployed SPA + CORS_ORIGIN for local dev. */
+  function parseOriginList() {
+    const parts = [process.env.CORS_ORIGIN, process.env.FRONTEND_URL]
+      .filter(Boolean)
+      .join(",");
+    const list = parts
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return [...new Set(list)];
+  }
+
+  /** If no explicit origins, allow any http(s)://localhost or 127.0.0.1 (Vite ports). */
   function corsMiddleware() {
-    const raw = process.env.CORS_ORIGIN?.trim();
-    if (raw) {
-      const origins = raw.split(",").map((s) => s.trim()).filter(Boolean);
+    const origins = parseOriginList();
+    if (origins.length > 0) {
+      console.log("[cors] Allowed origins:", origins.join(", "));
       return cors({
         origin: origins.length === 1 ? origins[0] : origins,
         credentials: true,
       });
     }
+    console.log("[cors] CORS_ORIGIN / FRONTEND_URL unset — only localhost / 127.0.0.1 allowed");
     return cors({
       credentials: true,
       origin(origin, cb) {
@@ -313,12 +327,15 @@ async function main() {
       resave: false,
       saveUninitialized: false,
       store: MongoStore.create({ mongoUrl: MONGODB_URI, ttl: 60 * 60 * 24 * 7 }),
-      cookie: {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.COOKIE_SECURE === "1",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      },
+      cookie: (() => {
+        const crossSite = process.env.SESSION_SAME_SITE === "none";
+        return {
+          httpOnly: true,
+          sameSite: crossSite ? "none" : "lax",
+          secure: crossSite ? true : process.env.COOKIE_SECURE === "1",
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        };
+      })(),
     }),
   );
 

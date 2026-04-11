@@ -280,9 +280,9 @@ async function main() {
 
   const app = express();
 
-  /** Collect allowed browser origins (comma-separated). Use FRONTEND_URL for your deployed SPA + CORS_ORIGIN for local dev. */
+  /** Collect allowed browser origins (comma-separated in each var). */
   function parseOriginList() {
-    const parts = [process.env.CORS_ORIGIN, process.env.FRONTEND_URL]
+    const parts = [process.env.CORS_ORIGIN, process.env.FRONTEND_URL, process.env.WEB_APP_URL]
       .filter(Boolean)
       .join(",");
     const list = parts
@@ -292,23 +292,39 @@ async function main() {
     return [...new Set(list)];
   }
 
-  /** If no explicit origins, allow any http(s)://localhost or 127.0.0.1 (Vite ports). */
+  /**
+   * Never pass a single string to cors({ origin }) — it always echoes that value and breaks other sites.
+   * Use a Set + callback so Access-Control-Allow-Origin matches the request only when allowed.
+   */
   function corsMiddleware() {
     const origins = parseOriginList();
     if (origins.length > 0) {
-      console.log("[cors] Allowed origins:", origins.join(", "));
+      const allow = new Set(origins);
+      console.log("[cors] Allowed origins:", [...allow].join(", "));
+      if (
+        process.env.RENDER === "true" &&
+        [...allow].every((o) => /localhost|127\.0\.0\.1/i.test(o))
+      ) {
+        console.warn(
+          "[cors] RENDER=true but only localhost origins. Set FRONTEND_URL (or WEB_APP_URL) to your live SPA, e.g. https://budget-hub-pro.onrender.com",
+        );
+      }
       return cors({
-        origin: origins.length === 1 ? origins[0] : origins,
         credentials: true,
+        origin(originHeader, cb) {
+          if (!originHeader) return cb(null, true);
+          if (allow.has(originHeader)) return cb(null, true);
+          return cb(null, false);
+        },
       });
     }
-    console.log("[cors] CORS_ORIGIN / FRONTEND_URL unset — only localhost / 127.0.0.1 allowed");
+    console.log("[cors] CORS_ORIGIN / FRONTEND_URL / WEB_APP_URL unset — only localhost / 127.0.0.1 allowed");
     return cors({
       credentials: true,
-      origin(origin, cb) {
-        if (!origin) return cb(null, true);
+      origin(originHeader, cb) {
+        if (!originHeader) return cb(null, true);
         try {
-          const u = new URL(origin);
+          const u = new URL(originHeader);
           if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return cb(null, true);
         } catch {
           /* ignore */

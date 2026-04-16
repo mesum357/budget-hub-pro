@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import type { SpendingReceipt } from "@/data/mockData";
 import { Plus, FileText } from "lucide-react";
@@ -13,11 +13,14 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatPkr } from "@/lib/currency";
 import { apiUrl } from "@/lib/apiBase";
+import { AttachmentPreviewDialog } from "@/components/AttachmentPreviewDialog";
 
 export default function SubSpendingPage() {
   const [rows, setRows] = useState<SpendingReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -54,6 +57,11 @@ export default function SubSpendingPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const previewUrl = useMemo(
+    () => (previewAttachment ? apiUrl(`/uploads/${encodeURIComponent(previewAttachment)}`) : null),
+    [previewAttachment],
+  );
 
   const statusColors: Record<string, string> = {
     approved: "bg-success/10 text-success border-0",
@@ -101,6 +109,16 @@ export default function SubSpendingPage() {
   return (
     <DashboardLayout title="Spending" mode="sub">
       <div className="space-y-4">
+        <AttachmentPreviewDialog
+          open={previewOpen}
+          onOpenChange={(o) => {
+            setPreviewOpen(o);
+            if (!o) setPreviewAttachment(null);
+          }}
+          url={previewUrl}
+          filename={previewAttachment}
+        />
+
         <div className="flex justify-end">
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -141,7 +159,7 @@ export default function SubSpendingPage() {
           </Dialog>
         </div>
 
-        <Card className="shadow-sm">
+        <Card className="ui-card-interactive">
           <CardHeader>
             <CardTitle className="text-base">Your receipts</CardTitle>
           </CardHeader>
@@ -149,7 +167,7 @@ export default function SubSpendingPage() {
             {loading ? (
               <p className="text-sm text-muted-foreground py-6">Loading…</p>
             ) : (
-              <Table>
+              <Table className="min-w-[820px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Amount</TableHead>
@@ -178,15 +196,17 @@ export default function SubSpendingPage() {
                       </TableCell>
                       <TableCell>
                         {s.attachment ? (
-                          <a
-                            href={apiUrl(`/uploads/${encodeURIComponent(s.attachment)}`)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-primary text-sm hover:underline"
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-primary text-sm underline-offset-4 hover:underline transition-colors"
+                            onClick={() => {
+                              setPreviewAttachment(s.attachment ?? null);
+                              setPreviewOpen(true);
+                            }}
                           >
                             <FileText className="h-3.5 w-3.5" />
                             View
-                          </a>
+                          </button>
                         ) : (
                           "—"
                         )}

@@ -1,7 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SubAppSidebar } from "@/components/SubAppSidebar";
-import { Bell } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -37,10 +36,6 @@ export function DashboardLayout({ children, title, mode = "admin" }: DashboardLa
               <h1 className="text-lg font-semibold text-foreground hidden sm:block">{title}</h1>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" className="relative ui-icon-button hover:bg-accent/60">
-                <Bell className="h-5 w-5 text-muted-foreground" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-destructive rounded-full" />
-              </Button>
               <div className="flex items-center gap-2">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">{initials}</AvatarFallback>

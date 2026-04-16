@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import type { SpendingReceipt } from "@/data/mockData";
 import { FileText, Search, Filter } from "lucide-react";
@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { formatPkr } from "@/lib/currency";
 import { apiUrl } from "@/lib/apiBase";
+import { AttachmentPreviewDialog } from "@/components/AttachmentPreviewDialog";
 
 export default function SpendingsPage() {
   const [spendings, setSpendings] = useState<SpendingReceipt[]>([]);
@@ -19,6 +20,8 @@ export default function SpendingsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const { toast } = useToast();
+  const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,6 +41,11 @@ export default function SpendingsPage() {
   }, [load]);
 
   const categories = Array.from(new Set(spendings.map((s) => s.category)));
+
+  const previewUrl = useMemo(
+    () => (previewAttachment ? apiUrl(`/uploads/${encodeURIComponent(previewAttachment)}`) : null),
+    [previewAttachment],
+  );
 
   const filtered = spendings.filter((s) => {
     const matchSearch =
@@ -76,6 +84,16 @@ export default function SpendingsPage() {
   return (
     <DashboardLayout title="Spendings">
       <div className="space-y-4">
+        <AttachmentPreviewDialog
+          open={previewOpen}
+          onOpenChange={(o) => {
+            setPreviewOpen(o);
+            if (!o) setPreviewAttachment(null);
+          }}
+          url={previewUrl}
+          filename={previewAttachment}
+        />
+
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -115,7 +133,7 @@ export default function SpendingsPage() {
           </div>
         </div>
 
-        <Card className="shadow-sm">
+        <Card className="ui-card-interactive">
           <CardHeader>
             <CardTitle className="text-base">Spending Receipts</CardTitle>
           </CardHeader>
@@ -123,7 +141,7 @@ export default function SpendingsPage() {
             {loading ? (
               <p className="text-sm text-muted-foreground py-6">Loading…</p>
             ) : (
-              <Table>
+              <Table className="min-w-[980px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>User</TableHead>
@@ -155,15 +173,17 @@ export default function SpendingsPage() {
                       </TableCell>
                       <TableCell>
                         {s.attachment ? (
-                          <a
-                            href={apiUrl(`/uploads/${encodeURIComponent(s.attachment)}`)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-1 text-primary text-sm hover:underline"
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-primary text-sm underline-offset-4 hover:underline transition-colors"
+                            onClick={() => {
+                              setPreviewAttachment(s.attachment ?? null);
+                              setPreviewOpen(true);
+                            }}
                           >
                             <FileText className="h-3.5 w-3.5" />
                             View
-                          </a>
+                          </button>
                         ) : (
                           <span className="text-muted-foreground text-sm">—</span>
                         )}

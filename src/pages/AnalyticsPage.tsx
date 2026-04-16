@@ -94,7 +94,7 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card className="shadow-sm">
+          <Card className="ui-card-interactive">
             <CardHeader>
               <CardTitle className="text-base">Spending by User</CardTitle>
             </CardHeader>
@@ -128,7 +128,7 @@ export default function AnalyticsPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm">
+          <Card className="ui-card-interactive">
             <CardHeader>
               <CardTitle className="text-base">Spending by Category</CardTitle>
             </CardHeader>
@@ -168,7 +168,7 @@ export default function AnalyticsPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm lg:col-span-2">
+          <Card className="ui-card-interactive lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-base">Monthly spending vs allocated</CardTitle>
             </CardHeader>

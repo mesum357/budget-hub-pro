@@ -1,6 +1,7 @@
 import { LayoutDashboard, Users, Wallet, Receipt, BarChart3, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
   Sidebar,
@@ -9,11 +10,13 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { apiUrl } from "@/lib/apiBase";
 
 const navItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -29,12 +32,37 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const [pendingReceipts, setPendingReceipts] = useState<number>(0);
 
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
     await logout();
     navigate("/");
   };
+
+  const loadSidebarCounts = useCallback(async () => {
+    try {
+      const r = await fetch(apiUrl("/api/admin/receipts"), { credentials: "include" });
+      if (!r.ok) return;
+      const data = (await r.json()) as { status?: string }[];
+      const pending = data.reduce((acc, row) => acc + (row.status === "pending" ? 1 : 0), 0);
+      setPendingReceipts(pending);
+    } catch {
+      // ignore sidebar counts failures
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSidebarCounts();
+    const t = window.setInterval(() => void loadSidebarCounts(), 30_000);
+    return () => window.clearInterval(t);
+  }, [loadSidebarCounts]);
+
+  const badgesByUrl = useMemo(() => {
+    return {
+      "/spendings": pendingReceipts,
+    } satisfies Record<string, number>;
+  }, [pendingReceipts]);
 
   return (
     <Sidebar collapsible="icon">
@@ -62,17 +90,19 @@ export function AppSidebar() {
                     asChild
                     isActive={location.pathname === item.url}
                     tooltip={item.title}
+                    size="lg"
                   >
                     <NavLink
                       to={item.url}
                       end
-                      className="relative rounded-md hover:bg-sidebar-accent/60 transition-[background-color,color,transform] duration-200 ease-out hover:translate-x-[2px]"
+                      className="relative rounded-md ui-focus-ring hover:bg-sidebar-accent/60 transition-[background-color,color,transform] duration-200 ease-out hover:translate-x-[2px]"
                       activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-1 before:bottom-1 before:w-1 before:rounded-r before:bg-sidebar-primary"
                     >
                       <item.icon className="h-4 w-4" />
                       {!collapsed && <span>{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
+                  {badgesByUrl[item.url] ? <SidebarMenuBadge>{badgesByUrl[item.url]}</SidebarMenuBadge> : null}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

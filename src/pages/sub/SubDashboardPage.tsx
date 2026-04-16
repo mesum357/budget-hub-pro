@@ -3,9 +3,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { StatCard } from "@/components/StatCard";
 import { Wallet, CalendarDays, TrendingUp, PiggyBank } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import type { MonthlyPoint } from "@/data/mockData";
-import { formatPkr, formatPkrAxis } from "@/lib/currency";
+import { formatPkr } from "@/lib/currency";
 import { apiUrl } from "@/lib/apiBase";
 
 type SubDashboard = {
@@ -15,7 +13,6 @@ type SubDashboard = {
   remainingVsAllotment: number;
   spendingThisWeek: number;
   spendingThisMonth: number;
-  monthlySpendingData: MonthlyPoint[];
   recentActivity: { id: string; reason: string; amount: number; date: string; status: string }[];
 };
 
@@ -81,58 +78,25 @@ export default function SubDashboardPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card className="lg:col-span-2 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base">Spending vs allotment (6 months)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.monthlySpendingData} barGap={4}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis
-                      tick={{ fill: "hsl(var(--muted-foreground))" }}
-                      tickFormatter={(v) => formatPkrAxis(Number(v))}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
-                      }}
-                      formatter={(value: number) => [formatPkr(value), ""]}
-                    />
-                    <Legend />
-                    <Bar dataKey="budget" name="Your allotment" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} opacity={0.25} />
-                    <Bar dataKey="spending" name="Your spending" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-base">Recent receipts</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {data.recentActivity.length === 0 && <p className="text-sm text-muted-foreground">No receipts yet.</p>}
-              {data.recentActivity.map((item) => (
-                <div key={item.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{item.reason}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.date} · {item.status}
-                    </p>
-                  </div>
-                  <span className="text-sm font-semibold ml-2 whitespace-nowrap">{formatPkr(item.amount)}</span>
+        <Card className="ui-card-interactive">
+          <CardHeader>
+            <CardTitle className="text-base">Recent receipts</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {data.recentActivity.length === 0 && <p className="text-sm text-muted-foreground">No receipts yet.</p>}
+            {data.recentActivity.map((item) => (
+              <div key={item.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{item.reason}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.date} · {item.status}
+                  </p>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+                <span className="text-sm font-semibold ml-2 whitespace-nowrap">{formatPkr(item.amount)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

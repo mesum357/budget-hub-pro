@@ -39,7 +39,7 @@ export default function SubWalletPage() {
   return (
     <DashboardLayout title="Wallet" mode="sub">
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="shadow-sm">
+        <Card className="ui-card-interactive">
           <CardHeader>
             <CardTitle className="text-base">Balance</CardTitle>
           </CardHeader>
@@ -60,7 +60,7 @@ export default function SubWalletPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm md:col-span-2">
+        <Card className="ui-card-interactive md:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Top-up history</CardTitle>
           </CardHeader>
@@ -68,7 +68,7 @@ export default function SubWalletPage() {
             {loading ? (
               <p className="text-sm text-muted-foreground py-4">Loading…</p>
             ) : (
-              <Table>
+              <Table className="min-w-[700px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>

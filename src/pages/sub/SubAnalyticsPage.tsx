@@ -82,7 +82,7 @@ export default function SubAnalyticsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card className="shadow-sm">
+          <Card className="ui-card-interactive">
             <CardHeader>
               <CardTitle className="text-base">Your spending</CardTitle>
             </CardHeader>
@@ -112,7 +112,7 @@ export default function SubAnalyticsPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm">
+          <Card className="ui-card-interactive">
             <CardHeader>
               <CardTitle className="text-base">By category</CardTitle>
             </CardHeader>
@@ -154,7 +154,7 @@ export default function SubAnalyticsPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm lg:col-span-2">
+          <Card className="ui-card-interactive lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-base">Monthly trend</CardTitle>
             </CardHeader>

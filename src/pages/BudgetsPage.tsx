@@ -87,11 +87,11 @@ export default function BudgetsPage() {
         <CardHeader>
           <CardTitle className="text-base">User Budgets</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+          <CardContent className="overflow-x-auto">
           {loading ? (
             <p className="text-sm text-muted-foreground py-6">Loading…</p>
           ) : (
-            <Table>
+            <Table className="min-w-[940px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>User</TableHead>

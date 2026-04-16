@@ -35,7 +35,6 @@ export default function UsersPage() {
     email: "",
     password: "",
     role: "",
-    allottedBudget: "5000",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -49,7 +48,6 @@ export default function UsersPage() {
     email: "",
     role: "",
     status: "active" as "active" | "inactive",
-    allottedBudget: "",
     password: "",
   });
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
@@ -60,6 +58,14 @@ export default function UsersPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserListItem | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyPassword, setVerifyPassword] = useState("");
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
+  const [pendingAction, setPendingAction] = useState<null | { type: "edit"; user: UserListItem } | { type: "delete"; user: UserListItem }>(
+    null,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,8 +97,6 @@ export default function UsersPage() {
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Invalid email";
     if (!form.password || form.password.length < 6) e.password = "Password (min 6 characters) is required";
     if (!form.role.trim()) e.role = "Role is required";
-    const allot = Number(form.allottedBudget);
-    if (!Number.isFinite(allot) || allot < 0) e.allottedBudget = "Enter a valid allotted budget";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -109,7 +113,6 @@ export default function UsersPage() {
           email: form.email.trim(),
           password: form.password,
           role: form.role.trim(),
-          allottedBudget: Number(form.allottedBudget),
           avatar: imagePreview || undefined,
         }),
       });
@@ -118,7 +121,7 @@ export default function UsersPage() {
         toast({ title: "Create failed", description: data.error || "Try again", variant: "destructive" });
         return;
       }
-      setForm({ name: "", email: "", password: "", role: "", allottedBudget: "5000" });
+      setForm({ name: "", email: "", password: "", role: "" });
       setImagePreview(null);
       setErrors({});
       setOpen(false);
@@ -145,13 +148,56 @@ export default function UsersPage() {
       email: user.email,
       role: user.role,
       status: user.status,
-      allottedBudget: String(user.allottedBudget ?? 0),
       password: "",
     });
     setEditImagePreview(null);
     setEditClearAvatar(false);
     setEditErrors({});
     setEditOpen(true);
+  };
+
+  const requestVerify = (action: { type: "edit"; user: UserListItem } | { type: "delete"; user: UserListItem }) => {
+    setPendingAction(action);
+    setVerifyPassword("");
+    setVerifyError("");
+    setVerifyOpen(true);
+  };
+
+  const handleVerify = async () => {
+    if (!pendingAction) return;
+    if (!verifyPassword.trim()) {
+      setVerifyError("Password is required");
+      return;
+    }
+    setVerifyBusy(true);
+    setVerifyError("");
+    try {
+      const r = await fetch(apiUrl("/api/admin/verify-password"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password: verifyPassword }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setVerifyError(data.error || "Invalid password");
+        return;
+      }
+      setVerifyOpen(false);
+      const action = pendingAction;
+      setPendingAction(null);
+      setVerifyPassword("");
+      if (action.type === "edit") {
+        openEdit(action.user);
+      } else {
+        setUserToDelete(action.user);
+        setDeleteOpen(true);
+      }
+    } catch {
+      setVerifyError("Network error. Try again.");
+    } finally {
+      setVerifyBusy(false);
+    }
   };
 
   const handleEditImage = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,8 +218,6 @@ export default function UsersPage() {
     if (!editForm.email.trim()) e.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(editForm.email)) e.email = "Invalid email";
     if (!editForm.role.trim()) e.role = "Role is required";
-    const allot = Number(editForm.allottedBudget);
-    if (!Number.isFinite(allot) || allot < 0) e.allottedBudget = "Enter a valid allotted budget";
     if (editForm.password && editForm.password.length < 6) e.password = "Min 6 characters if changing password";
     setEditErrors(e);
     return Object.keys(e).length === 0;
@@ -189,7 +233,6 @@ export default function UsersPage() {
         email: editForm.email.trim(),
         role: editForm.role.trim(),
         status: editForm.status,
-        allottedBudget: Number(editForm.allottedBudget),
       };
       if (editForm.password.trim()) body.password = editForm.password;
       if (editImagePreview) body.avatar = editImagePreview;
@@ -253,6 +296,56 @@ export default function UsersPage() {
   return (
     <DashboardLayout title="Users">
       <div className="space-y-6">
+        <Dialog
+          open={verifyOpen}
+          onOpenChange={(o) => {
+            setVerifyOpen(o);
+            if (!o) {
+              setVerifyPassword("");
+              setVerifyError("");
+              setVerifyBusy(false);
+              setPendingAction(null);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Enter password</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 pt-1">
+              <p className="text-sm text-muted-foreground">To continue, confirm your admin password.</p>
+              <div className="space-y-2">
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  value={verifyPassword}
+                  onChange={(e) => {
+                    setVerifyPassword(e.target.value);
+                    setVerifyError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleVerify();
+                    }
+                  }}
+                  className={verifyError ? "border-destructive" : ""}
+                  autoFocus
+                />
+                {verifyError ? <p className="text-xs text-destructive">{verifyError}</p> : null}
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button type="button" variant="outline" onClick={() => setVerifyOpen(false)} disabled={verifyBusy}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={handleVerify} disabled={verifyBusy}>
+                  {verifyBusy ? "Verifying…" : "Verify"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -335,17 +428,9 @@ export default function UsersPage() {
                   />
                   {errors.role && <p className="text-xs text-destructive">{errors.role}</p>}
                 </div>
-                <div className="space-y-2">
-                  <Label>Allotted budget (PKR)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.allottedBudget}
-                    onChange={(e) => setForm({ ...form, allottedBudget: e.target.value })}
-                    className={errors.allottedBudget ? "border-destructive" : ""}
-                  />
-                  {errors.allottedBudget && <p className="text-xs text-destructive">{errors.allottedBudget}</p>}
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Users start with a zero wallet. Use <span className="font-medium text-foreground">Budget Management → Top Up</span> to credit funds.
+                </p>
                 <Button onClick={handleCreate} className="w-full">
                   Create User
                 </Button>
@@ -471,17 +556,6 @@ export default function UsersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Allotted budget (PKR)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={editForm.allottedBudget}
-                    onChange={(e) => setEditForm({ ...editForm, allottedBudget: e.target.value })}
-                    className={editErrors.allottedBudget ? "border-destructive" : ""}
-                  />
-                  {editErrors.allottedBudget && <p className="text-xs text-destructive">{editErrors.allottedBudget}</p>}
-                </div>
                 <div className="flex gap-2 justify-end pt-2">
                   <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
                     Cancel
@@ -503,7 +577,7 @@ export default function UsersPage() {
                 {userToDelete ? (
                   <>
                     This will permanently remove <span className="font-medium text-foreground">{userToDelete.name}</span> and all of
-                    their receipts, wallet top-ups, and allotment history. This cannot be undone.
+                    their receipts and wallet top-ups. This cannot be undone.
                   </>
                 ) : null}
               </AlertDialogDescription>
@@ -583,7 +657,7 @@ export default function UsersPage() {
                       size="icon"
                       className="h-9 w-9 text-muted-foreground hover:text-foreground ui-icon-button"
                       aria-label="Edit user"
-                      onClick={() => openEdit(user)}
+                      onClick={() => requestVerify({ type: "edit", user })}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -594,8 +668,7 @@ export default function UsersPage() {
                       className="h-9 w-9 text-muted-foreground hover:text-destructive ui-icon-button"
                       aria-label="Delete user"
                       onClick={() => {
-                        setUserToDelete(user);
-                        setDeleteOpen(true);
+                        requestVerify({ type: "delete", user });
                       }}
                     >
                       <Trash2 className="h-4 w-4" />

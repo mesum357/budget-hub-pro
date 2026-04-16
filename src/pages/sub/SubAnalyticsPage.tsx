@@ -65,7 +65,7 @@ export default function SubAnalyticsPage() {
       <div className="space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard title="Total spent" value={formatPkr(data.totalSpent)} icon={DollarSign} />
-          <StatCard title="Allotment used" value={`${util}%`} icon={TrendingUp} trend={{ value: "Of your cap", positive: util < 90 }} />
+          <StatCard title="Credited used" value={`${util}%`} icon={TrendingUp} trend={{ value: "Of total credited", positive: util < 90 }} />
           <StatCard title="Headroom" value={formatPkr(remaining)} icon={PieIcon} />
         </div>
 

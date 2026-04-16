@@ -147,7 +147,7 @@ export default function SubSpendingPage() {
                   <Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  You cannot exceed your allotted budget (including pending receipts) or your wallet balance.
+                  Your receipt amount cannot exceed your current wallet balance. Ask your admin for a top-up if needed.
                 </p>
                 <Button className="w-full" onClick={handleSubmit} disabled={submitting}>
                   {submitting ? "Submitting…" : "Submit receipt"}

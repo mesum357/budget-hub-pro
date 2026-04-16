@@ -45,9 +45,9 @@ function redactMongoUri(uri) {
   return String(uri).replace(/(mongodb(?:\+srv)?:\/\/)([^:]+):[^@]+@/, "$1$2:***@");
 }
 
-async function remainingBudgetForUser(subAdminId, allottedBudget) {
-  const spent = await sumCommittedSpending(subAdminId);
-  return Math.max(0, (allottedBudget || 0) - spent);
+async function remainingBudgetForUser(subAdminId) {
+  const u = await SubAdmin.findById(subAdminId).select("walletBalance").lean();
+  return Math.max(0, u?.walletBalance ?? 0);
 }
 
 /** Single connection string (Atlas: Project → Connect → Drivers → copy `mongodb+srv://...`). */
@@ -187,17 +187,17 @@ async function buildMonthlySeries(monthsBack = 6) {
     spendMap.set(k, row.spending);
   }
 
-  const allotAgg = await AllotmentChange.aggregate([
-    { $match: { effectiveAt: { $gte: start } } },
+  const topupAgg = await TopUp.aggregate([
+    { $match: { createdAt: { $gte: start } } },
     {
       $group: {
-        _id: { y: { $year: "$effectiveAt" }, m: { $month: "$effectiveAt" } },
-        allotted: { $sum: "$delta" },
+        _id: { y: { $year: "$createdAt" }, m: { $month: "$createdAt" } },
+        credited: { $sum: "$amount" },
       },
     },
   ]);
   const allotMap = new Map(
-    allotAgg.map((row) => [`${row._id.y}-${String(row._id.m).padStart(2, "0")}`, row.allotted]),
+    topupAgg.map((row) => [`${row._id.y}-${String(row._id.m).padStart(2, "0")}`, row.credited]),
   );
 
   return keys.map((k) => ({
@@ -237,13 +237,23 @@ async function buildSubMonthlySeries(subAdminId, monthsBack = 6) {
     const k = `${row._id.y}-${String(row._id.m).padStart(2, "0")}`;
     map.set(k, row.spending);
   }
-  const u = await SubAdmin.findById(subAdminId).lean();
-  const budgetLine = u?.allottedBudget ?? 0;
+  const topupAgg = await TopUp.aggregate([
+    { $match: { subAdminId: oid, createdAt: { $gte: start } } },
+    {
+      $group: {
+        _id: { y: { $year: "$createdAt" }, m: { $month: "$createdAt" } },
+        credited: { $sum: "$amount" },
+      },
+    },
+  ]);
+  const topupMap = new Map(
+    topupAgg.map((row) => [`${row._id.y}-${String(row._id.m).padStart(2, "0")}`, row.credited]),
+  );
   return keys.map((k) => ({
     month: monthLabelFromKey(k),
     monthKey: k,
     spending: Math.round((map.get(k) ?? 0) * 100) / 100,
-    budget: budgetLine,
+    budget: Math.round((topupMap.get(k) ?? 0) * 100) / 100,
   }));
 }
 
@@ -281,7 +291,6 @@ async function main() {
     process.exit(1);
   }
   await ensureAdminUser();
-  await backfillMissingAllotmentChanges();
 
   const app = express();
   app.set("trust proxy", 1);
@@ -392,6 +401,12 @@ async function main() {
     console.log("[session] SameSite=None; Secure (cross-origin SPA ↔ API)");
   }
 
+  const cookieSecure =
+    crossSiteSession ||
+    process.env.COOKIE_SECURE === "1" ||
+    process.env.RENDER === "true" ||
+    String(process.env.RENDER_EXTERNAL_URL || "").startsWith("https://");
+
   app.use(
     session({
       secret: SESSION_SECRET,
@@ -402,7 +417,7 @@ async function main() {
       cookie: {
         httpOnly: true,
         sameSite: crossSiteSession ? "none" : "lax",
-        secure: crossSiteSession ? true : process.env.COOKIE_SECURE === "1",
+        secure: cookieSecure,
         maxAge: 7 * 24 * 60 * 60 * 1000,
       },
     }),
@@ -461,6 +476,16 @@ async function main() {
   });
 
   /* ---------- Admin ---------- */
+  app.post("/api/admin/verify-password", requireAdmin, async (req, res) => {
+    const password = String(req.body?.password || "");
+    if (!password) return res.status(400).json({ error: "Password is required" });
+    const admin = await Admin.findById(req.session.adminId);
+    if (!admin) return res.status(401).json({ error: "Unauthorized" });
+    const ok = await bcrypt.compare(password, admin.passwordHash);
+    if (!ok) return res.status(401).json({ error: "Invalid password" });
+    return res.json({ ok: true });
+  });
+
   app.get("/api/admin/users", requireAdmin, async (_req, res) => {
     const list = await SubAdmin.find().sort({ createdAt: -1 }).lean();
     const rows = await Promise.all(
@@ -471,8 +496,9 @@ async function main() {
         role: u.roleLabel,
         status: u.status,
         createdAt: u.createdAt?.toISOString?.().split("T")[0] ?? "",
-        allottedBudget: u.allottedBudget,
-        walletBalance: await remainingBudgetForUser(u._id, u.allottedBudget || 0),
+        // For UI compatibility, "allottedBudget" now means total credited (top-ups) = wallet + committed spend.
+        allottedBudget: (u.walletBalance ?? 0) + (await sumCommittedSpending(u._id)),
+        walletBalance: await remainingBudgetForUser(u._id),
         avatar: u.avatarDataUrl || undefined,
       })),
     );
@@ -506,32 +532,25 @@ async function main() {
       byMonth.map((row) => [`${row._id.y}-${String(row._id.m).padStart(2, "0")}`, row.spent]),
     );
 
-    const byAllotmentMonth = await AllotmentChange.aggregate([
+    const byTopUpMonth = await TopUp.aggregate([
       {
         $match: {
           subAdminId: oid,
-          effectiveAt: { $gte: startMonth },
+          createdAt: { $gte: startMonth },
         },
       },
       {
         $group: {
-          _id: { y: { $year: "$effectiveAt" }, m: { $month: "$effectiveAt" } },
-          allotted: { $sum: "$delta" },
+          _id: { y: { $year: "$createdAt" }, m: { $month: "$createdAt" } },
+          credited: { $sum: "$amount" },
         },
       },
     ]);
-    const allottedMonthMap = new Map(
-      byAllotmentMonth.map((row) => [`${row._id.y}-${String(row._id.m).padStart(2, "0")}`, row.allotted]),
+    const creditedMonthMap = new Map(
+      byTopUpMonth.map((row) => [`${row._id.y}-${String(row._id.m).padStart(2, "0")}`, row.credited]),
     );
 
-    const loggedAllotmentTotal = [...allottedMonthMap.values()].reduce((a, b) => a + b, 0);
-    if (loggedAllotmentTotal === 0 && (u.allottedBudget || 0) > 0) {
-      const join = new Date(u.createdAt);
-      const jk = `${join.getUTCFullYear()}-${String(join.getUTCMonth() + 1).padStart(2, "0")}`;
-      if (join >= startMonth) allottedMonthMap.set(jk, u.allottedBudget);
-    }
-
-    const allotted = u.allottedBudget || 0;
+    const creditedTotal = [...creditedMonthMap.values()].reduce((a, b) => a + b, 0);
     const monthly = [];
     for (let i = 11; i >= 0; i--) {
       const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
@@ -539,7 +558,7 @@ async function main() {
       const m = d.getUTCMonth() + 1;
       const key = `${y}-${String(m).padStart(2, "0")}`;
       const raw = spentMap.get(key) ?? 0;
-      const allotInMonth = allottedMonthMap.get(key) ?? 0;
+      const allotInMonth = creditedMonthMap.get(key) ?? 0;
       monthly.push({
         monthKey: key,
         monthLabel: d.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }),
@@ -565,8 +584,8 @@ async function main() {
         role: u.roleLabel,
         status: u.status,
         createdAt: u.createdAt?.toISOString?.().split("T")[0] ?? "",
-        allottedBudget: allotted,
-        walletBalance: await remainingBudgetForUser(u._id, allotted),
+        allottedBudget: Math.round(((u.walletBalance ?? 0) + (await sumCommittedSpending(u._id))) * 100) / 100,
+        walletBalance: await remainingBudgetForUser(u._id),
         avatar: u.avatarDataUrl || undefined,
       },
       spendingHistory: receipts.map((r) => ({
@@ -583,30 +602,21 @@ async function main() {
 
   app.post("/api/admin/users", requireAdmin, async (req, res) => {
     try {
-      const { name, email, password, role, allottedBudget, avatar } = req.body || {};
+      const { name, email, password, role, avatar } = req.body || {};
       if (!name?.trim() || !email?.trim() || !password || String(password).length < 6) {
         return res.status(400).json({ error: "Name, email, and password (min 6 chars) required" });
       }
       const hash = await bcrypt.hash(String(password), 10);
-      const allot = Math.max(0, Number(allottedBudget) || 0);
       const doc = await SubAdmin.create({
         name: String(name).trim(),
         email: String(email).toLowerCase().trim(),
         passwordHash: hash,
         roleLabel: role ? String(role) : "Sub Admin",
-        allottedBudget: allot,
-        // Wallet is used as "remaining budget" in the product (allotted minus pending+approved receipts).
-        // Initialize wallet to the allotted budget so new users don't start at 0.
-        walletBalance: allot,
+        // Budget is wallet/top-ups only. New users start at 0 and must be topped up by admin.
+        allottedBudget: 0,
+        walletBalance: 0,
         avatarDataUrl: typeof avatar === "string" && avatar.startsWith("data:") ? avatar.slice(0, 400000) : undefined,
       });
-      if (allot > 0) {
-        await AllotmentChange.create({
-          subAdminId: doc._id,
-          delta: allot,
-          effectiveAt: doc.createdAt,
-        });
-      }
       res.status(201).json({
         id: String(doc._id),
         name: doc.name,
@@ -631,7 +641,7 @@ async function main() {
       const prev = await SubAdmin.findById(oid).lean();
       if (!prev) return res.status(404).json({ error: "Not found" });
 
-      const { name, email, role, roleLabel, status, password, avatar, allottedBudget } = req.body || {};
+      const { name, email, role, roleLabel, status, password, avatar } = req.body || {};
       const setDoc = {};
 
       if (name !== undefined) {
@@ -665,37 +675,19 @@ async function main() {
         setDoc.avatarDataUrl = avatar.slice(0, 400000);
       }
 
-      let allotDelta = null;
-      if (allottedBudget !== undefined && allottedBudget !== null) {
-        const v = Math.max(0, Number(allottedBudget));
-        if (!Number.isFinite(v)) return res.status(400).json({ error: "Invalid allotted budget" });
-        const oldCap = prev.allottedBudget || 0;
-        if (v !== oldCap) {
-          setDoc.allottedBudget = v;
-          allotDelta = v - oldCap;
-        }
-      }
-
       const unsetAvatar = avatar === null;
-      if (Object.keys(setDoc).length === 0 && allotDelta === null && !unsetAvatar) {
+      if (Object.keys(setDoc).length === 0 && !unsetAvatar) {
         return res.status(400).json({ error: "No updates provided" });
       }
 
       const mongoUpdate = {};
       if (Object.keys(setDoc).length) mongoUpdate.$set = setDoc;
       if (unsetAvatar) mongoUpdate.$unset = { avatarDataUrl: "" };
-      if (allotDelta !== null && allotDelta !== 0) {
-        // Keep wallet in sync with allotted budget changes so wallet reflects remaining budget.
-        mongoUpdate.$inc = { ...(mongoUpdate.$inc || {}), walletBalance: allotDelta };
-      }
 
       let u = Object.keys(mongoUpdate).length
         ? await SubAdmin.findByIdAndUpdate(oid, mongoUpdate, { new: true, runValidators: true }).lean()
         : await SubAdmin.findById(oid).lean();
       if (!u) return res.status(404).json({ error: "Not found" });
-      if (allotDelta !== null && allotDelta !== 0) {
-        await AllotmentChange.create({ subAdminId: oid, delta: allotDelta, effectiveAt: new Date() });
-      }
       if ((u.walletBalance ?? 0) < 0) {
         u = await SubAdmin.findByIdAndUpdate(oid, { $set: { walletBalance: 0 } }, { new: true }).lean();
       }
@@ -706,7 +698,7 @@ async function main() {
         role: u.roleLabel,
         status: u.status,
         createdAt: u.createdAt?.toISOString?.().split("T")[0] ?? "",
-        allottedBudget: u.allottedBudget,
+        allottedBudget: (u.walletBalance ?? 0) + (await sumCommittedSpending(u._id)),
         walletBalance: u.walletBalance,
         avatar: u.avatarDataUrl || undefined,
       });
@@ -742,24 +734,7 @@ async function main() {
   });
 
   app.patch("/api/admin/users/:id/allotment", requireAdmin, async (req, res) => {
-    const v = Number(req.body?.allottedBudget);
-    if (!Number.isFinite(v) || v < 0) return res.status(400).json({ error: "Invalid allotted budget" });
-    const prev = await SubAdmin.findById(req.params.id).lean();
-    if (!prev) return res.status(404).json({ error: "Not found" });
-    const oldCap = prev.allottedBudget || 0;
-    const delta = v - oldCap;
-    let u = await SubAdmin.findByIdAndUpdate(
-      req.params.id,
-      { $set: { allottedBudget: v }, ...(delta !== 0 ? { $inc: { walletBalance: delta } } : {}) },
-      { new: true },
-    ).lean();
-    if (delta !== 0) {
-      await AllotmentChange.create({ subAdminId: prev._id, delta, effectiveAt: new Date() });
-    }
-    if ((u.walletBalance ?? 0) < 0) {
-      u = await SubAdmin.findByIdAndUpdate(req.params.id, { $set: { walletBalance: 0 } }, { new: true }).lean();
-    }
-    res.json({ id: String(u._id), allottedBudget: u.allottedBudget });
+    return res.status(410).json({ error: "Allotted budget is deprecated. Use Top Ups to credit wallet balance." });
   });
 
   app.post("/api/admin/users/:id/topup", requireAdmin, async (req, res) => {
@@ -782,13 +757,14 @@ async function main() {
     const out = [];
     for (const u of users) {
       const spent = await sumCommittedSpending(u._id);
-      const allotted = u.allottedBudget || 0;
-      const util = allotted > 0 ? Math.min(100, Math.round((spent / allotted) * 100)) : 0;
+      const wallet = Math.max(0, u.walletBalance ?? 0);
+      const credited = wallet + spent;
+      const util = credited > 0 ? Math.min(100, Math.round((spent / credited) * 100)) : 0;
       out.push({
         userId: String(u._id),
         userName: u.name,
-        budgetAvailable: Math.max(0, allotted - spent),
-        budgetAllotted: allotted,
+        budgetAvailable: wallet,
+        budgetAllotted: credited,
         spent,
         utilizationPct: util,
       });
@@ -821,6 +797,9 @@ async function main() {
 
     r.status = status;
     await r.save();
+    if (status === "rejected") {
+      await SubAdmin.findByIdAndUpdate(r.subAdminId, { $inc: { walletBalance: r.amount } });
+    }
     res.json({
       id: String(r._id),
       status: r.status,
@@ -829,13 +808,14 @@ async function main() {
 
   app.get("/api/admin/dashboard", requireAdmin, async (_req, res) => {
     const userCount = await SubAdmin.countDocuments();
-    const allotAgg = await SubAdmin.aggregate([{ $group: { _id: null, t: { $sum: "$allottedBudget" } } }]);
-    const totalAllotted = allotAgg[0]?.t ?? 0;
     const spentAgg = await Receipt.aggregate([
       { $match: { status: { $in: ["pending", "approved"] } } },
       { $group: { _id: null, t: { $sum: "$amount" } } },
     ]);
     const totalSpent = spentAgg[0]?.t ?? 0;
+    const walletAgg = await SubAdmin.aggregate([{ $group: { _id: null, t: { $sum: "$walletBalance" } } }]);
+    const totalWallet = walletAgg[0]?.t ?? 0;
+    const totalAllotted = Math.round((totalWallet + totalSpent) * 100) / 100;
     const utilizationPct = totalAllotted > 0 ? Math.round((totalSpent / totalAllotted) * 100) : 0;
     const monthly = await buildMonthlySeries(6);
     const recent = await Receipt.find({ status: { $in: ["pending", "approved"] } })
@@ -914,7 +894,8 @@ async function main() {
     const u = await SubAdmin.findById(id).lean();
     if (!u) return res.status(404).json({ error: "Not found" });
     const spent = await sumCommittedSpending(id);
-    const remaining = Math.max(0, (u.allottedBudget || 0) - spent);
+    const remaining = Math.max(0, u.walletBalance ?? 0);
+    const credited = remaining + spent;
     const now = new Date();
     const w0 = startOfWeek(now);
     const m0 = startOfMonth(now);
@@ -947,7 +928,8 @@ async function main() {
       .lean();
     res.json({
       name: u.name,
-      allottedBudget: u.allottedBudget,
+      // For UI compatibility, allottedBudget now represents total credited via top-ups.
+      allottedBudget: credited,
       walletBalance: remaining,
       spentCommitted: spent,
       remainingVsAllotment: remaining,
@@ -977,11 +959,12 @@ async function main() {
 
       const u = await SubAdmin.findById(id);
       if (!u) return res.status(404).json({ error: "Not found" });
-      const spent = await sumCommittedSpending(id);
-      if (spent + amount > (u.allottedBudget || 0)) {
+      if ((u.walletBalance ?? 0) < amount) {
         if (req.file?.filename) fs.unlink(path.join(UPLOAD_DIR, req.file.filename), () => {});
-        return res.status(400).json({ error: "Amount exceeds your allotted budget (including pending receipts)." });
+        return res.status(400).json({ error: "Insufficient wallet balance. Ask your admin for a top-up." });
       }
+      u.walletBalance = Math.max(0, (u.walletBalance ?? 0) - amount);
+      await u.save();
       const r = await Receipt.create({
         subAdminId: u._id,
         amount,
@@ -1024,10 +1007,11 @@ async function main() {
     const u = await SubAdmin.findById(id).lean();
     if (!u) return res.status(404).json({ error: "Not found" });
     const tops = await TopUp.find({ subAdminId: id }).sort({ createdAt: -1 }).limit(100).lean();
-    const remaining = await remainingBudgetForUser(u._id, u.allottedBudget || 0);
+    const spent = await sumCommittedSpending(id);
+    const remaining = await remainingBudgetForUser(u._id);
     res.json({
       balance: remaining,
-      allottedBudget: u.allottedBudget,
+      allottedBudget: remaining + spent,
       history: tops.map((t) => ({
         id: String(t._id),
         amount: t.amount,

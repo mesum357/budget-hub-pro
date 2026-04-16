@@ -96,7 +96,7 @@ export default function BudgetsPage() {
                 <TableRow>
                   <TableHead>User</TableHead>
                   <TableHead>Wallet balance</TableHead>
-                  <TableHead>Allotted budget</TableHead>
+                  <TableHead>Total credited</TableHead>
                   <TableHead>Spent (pending+approved)</TableHead>
                   <TableHead>Utilization</TableHead>
                   <TableHead>Status</TableHead>

@@ -11,7 +11,7 @@ type TopRow = { id: string; amount: number; note: string; createdAt: string };
 
 export default function SubWalletPage() {
   const [balance, setBalance] = useState(0);
-  const [allotted, setAllotted] = useState(0);
+  const [credited, setCredited] = useState(0);
   const [history, setHistory] = useState<TopRow[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -23,7 +23,7 @@ export default function SubWalletPage() {
       if (!r.ok) throw new Error();
       const data = await r.json();
       setBalance(data.balance);
-      setAllotted(data.allottedBudget);
+      setCredited(data.allottedBudget);
       setHistory(data.history || []);
     } catch {
       toast({ title: "Could not load wallet", variant: "destructive" });
@@ -50,7 +50,7 @@ export default function SubWalletPage() {
               <div className="space-y-2">
                 <p className="text-3xl font-bold tracking-tight">{formatPkr(balance)}</p>
                 <p className="text-sm text-muted-foreground">
-                  Allotted spending cap: <span className="font-medium text-foreground">{formatPkr(allotted)}</span>
+                  Total credited: <span className="font-medium text-foreground">{formatPkr(credited)}</span>
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Receipts deduct from your wallet. Admins credit your wallet via top-ups (shown below).

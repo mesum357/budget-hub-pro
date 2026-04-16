@@ -53,10 +53,10 @@ export default function SubDashboardPage() {
       <div className="space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
-            title="Allotted budget"
+            title="Total credited"
             value={formatPkr(data.allottedBudget)}
             icon={PiggyBank}
-            trend={{ value: "Spending cap", positive: true }}
+            trend={{ value: "Top-ups total", positive: true }}
           />
           <StatCard
             title="Wallet balance"
@@ -74,7 +74,7 @@ export default function SubDashboardPage() {
             title="This month"
             value={formatPkr(Math.round(data.spendingThisMonth))}
             icon={TrendingUp}
-            trend={{ value: `${util}% of allotment used`, positive: util < 80 }}
+            trend={{ value: `${util}% used`, positive: util < 80 }}
           />
         </div>
 

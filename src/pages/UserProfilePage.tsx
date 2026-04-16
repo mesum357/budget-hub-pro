@@ -170,7 +170,7 @@ export default function UserProfilePage() {
                       <p className="text-2xl font-semibold tracking-tight mt-1">{formatPkr(profile.user.walletBalance)}</p>
                     </div>
                     <div className="rounded-xl border bg-card p-4 ui-card-interactive">
-                      <p className="text-xs text-muted-foreground">Allotted (cap)</p>
+                      <p className="text-xs text-muted-foreground">Total credited</p>
                       <p className="text-2xl font-semibold tracking-tight mt-1">{formatPkr(profile.user.allottedBudget)}</p>
                     </div>
                   </div>

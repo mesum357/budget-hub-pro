@@ -54,10 +54,10 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard title="Total Sub-Admins" value={String(totalUsers)} icon={Users} trend={{ value: "Active users", positive: true }} />
           <StatCard
-            title="Money Allotted"
+            title="Total credited"
             value={formatPkr(totalAllotted)}
             icon={DollarSign}
-            trend={{ value: "Across all users", positive: true }}
+            trend={{ value: "Wallet + spent", positive: true }}
           />
           <StatCard
             title="Money Spent"

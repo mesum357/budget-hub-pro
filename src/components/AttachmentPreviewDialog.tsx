@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { ExternalLink, Download, FileText } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +31,7 @@ export function AttachmentPreviewDialog({ open, onOpenChange, url, filename }: P
               <FileText className="h-4 w-4 text-muted-foreground" />
               <span className="truncate">{filename || "Attachment"}</span>
             </DialogTitle>
+            <DialogDescription className="sr-only">Preview or download the attached file.</DialogDescription>
           </DialogHeader>
           {url ? (
             <div className="mt-3 flex flex-wrap gap-2">

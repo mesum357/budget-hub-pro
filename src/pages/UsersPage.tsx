@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -311,9 +311,9 @@ export default function UsersPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Enter password</DialogTitle>
+              <DialogDescription>To continue, confirm your admin password.</DialogDescription>
             </DialogHeader>
             <div className="space-y-3 pt-1">
-              <p className="text-sm text-muted-foreground">To continue, confirm your admin password.</p>
               <div className="space-y-2">
                 <Label>Password</Label>
                 <Input
@@ -361,6 +361,7 @@ export default function UsersPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create Sub-Admin</DialogTitle>
+                <DialogDescription>Add a new sub-admin account. They start with a zero wallet until you apply a top-up.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="flex justify-center">
@@ -449,6 +450,7 @@ export default function UsersPage() {
           <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit sub-admin</DialogTitle>
+              <DialogDescription>Update profile, login email, password, role, or account status.</DialogDescription>
             </DialogHeader>
             {editingUser && (
               <div className="space-y-4 pt-2">

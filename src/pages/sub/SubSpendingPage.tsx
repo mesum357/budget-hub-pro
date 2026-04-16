@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { formatPkr } from "@/lib/currency";
@@ -25,14 +26,18 @@ export default function SubSpendingPage() {
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const { toast } = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(apiUrl("/api/sub/receipts"), { credentials: "include" });
-      if (!r.ok) throw new Error();
-      const data = await r.json();
+      const [rReceipts, rWallet] = await Promise.all([
+        fetch(apiUrl("/api/sub/receipts"), { credentials: "include" }),
+        fetch(apiUrl("/api/sub/wallet"), { credentials: "include" }),
+      ]);
+      if (!rReceipts.ok) throw new Error();
+      const data = await rReceipts.json();
       setRows(
         data.map((x: { id: string; amount: number; reason: string; date: string; status: string; attachment?: string }) => ({
           id: x.id,
@@ -45,6 +50,12 @@ export default function SubSpendingPage() {
           attachment: x.attachment,
         })),
       );
+      if (rWallet.ok) {
+        const w = (await rWallet.json()) as { balance?: number };
+        setWalletBalance(typeof w.balance === "number" ? w.balance : 0);
+      } else {
+        setWalletBalance(null);
+      }
     } catch {
       toast({ title: "Could not load receipts", variant: "destructive" });
     } finally {
@@ -117,7 +128,12 @@ export default function SubSpendingPage() {
           filename={previewAttachment}
         />
 
-        <div className="flex justify-end">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+          {walletBalance !== null ? (
+            <p className="text-sm text-muted-foreground sm:mr-auto">
+              Wallet balance: <span className="font-medium text-foreground">{formatPkr(walletBalance)}</span>
+            </p>
+          ) : null}
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -128,6 +144,7 @@ export default function SubSpendingPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>New receipt</DialogTitle>
+                <DialogDescription>Submit an expense for admin review. Amount cannot exceed your current wallet balance.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="space-y-2">

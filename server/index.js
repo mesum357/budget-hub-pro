@@ -575,7 +575,6 @@ async function main() {
         reason: r.reason,
         date: r.date?.toISOString?.().split("T")[0] ?? "",
         status: r.status,
-        category: r.category || "General",
         attachment: r.attachmentFilename || undefined,
       })),
       monthly: monthlyForChart,
@@ -809,7 +808,6 @@ async function main() {
         date: r.date?.toISOString?.().split("T")[0] ?? "",
         status: r.status,
         attachment: r.attachmentFilename || undefined,
-        category: r.category || "General",
       })),
     );
   });
@@ -892,15 +890,6 @@ async function main() {
       spent: Math.round(x.spent * 100) / 100,
     }));
 
-    const byCat = await Receipt.aggregate([
-      { $match: { status: { $in: ["pending", "approved"] } } },
-      { $group: { _id: "$category", value: { $sum: "$amount" } } },
-    ]);
-    const categoryData = byCat.map((c) => ({
-      name: c._id || "General",
-      value: Math.round(c.value * 100) / 100,
-    }));
-
     const monthlySpendingData = await buildMonthlySeries(6);
     const totalSpent = spendingByUser.reduce((a, b) => a + b.spent, 0);
     const avgSpend =
@@ -912,12 +901,10 @@ async function main() {
 
     res.json({
       spendingByUser,
-      categoryData,
       monthlySpendingData,
       totalSpent: Math.round(totalSpent * 100) / 100,
       avgSpend,
       topSpender: { name: topSpender.fullName || topSpender.name, spent: topSpender.spent },
-      categoryCount: categoryData.length,
     });
   });
 
@@ -1001,7 +988,6 @@ async function main() {
         reason,
         date,
         attachmentFilename: req.file?.filename,
-        category: "General",
         status: "pending",
       });
       res.status(201).json({
@@ -1029,7 +1015,6 @@ async function main() {
         date: r.date?.toISOString?.().split("T")[0] ?? "",
         status: r.status,
         attachment: r.attachmentFilename || undefined,
-        category: r.category || "General",
       })),
     );
   });
@@ -1061,20 +1046,11 @@ async function main() {
       { $group: { _id: null, t: { $sum: "$amount" } } },
     ]);
     const totalSpent = spentAgg[0]?.t ?? 0;
-    const byCat = await Receipt.aggregate([
-      { $match: { subAdminId: oid, status: { $in: ["pending", "approved"] } } },
-      { $group: { _id: "$category", value: { $sum: "$amount" } } },
-    ]);
-    const categoryData = byCat.map((c) => ({
-      name: c._id || "General",
-      value: Math.round(c.value * 100) / 100,
-    }));
     const monthlySpendingData = await buildSubMonthlySeries(id, 6);
     res.json({
       name: u?.name,
       allottedBudget: u?.allottedBudget ?? 0,
       totalSpent: Math.round(totalSpent * 100) / 100,
-      categoryData,
       monthlySpendingData,
       spendingByUser: [{ name: "You", spent: Math.round(totalSpent * 100) / 100 }],
     });

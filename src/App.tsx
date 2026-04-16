@@ -8,6 +8,7 @@ import { RequireAdmin, RequireSub } from "@/components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import UsersPage from "./pages/UsersPage";
+import UserProfilePage from "./pages/UserProfilePage";
 import BudgetsPage from "./pages/BudgetsPage";
 import SpendingsPage from "./pages/SpendingsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
@@ -39,6 +40,14 @@ function AnimatedRoutes() {
           element={
             <RequireAdmin>
               <UsersPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/users/:userId"
+          element={
+            <RequireAdmin>
+              <UserProfilePage />
             </RequireAdmin>
           }
         />

@@ -23,7 +23,6 @@ const receiptSchema = new mongoose.Schema({
   reason: { type: String, required: true, trim: true },
   date: { type: Date, required: true },
   attachmentFilename: { type: String },
-  category: { type: String, default: "General" },
   status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
   createdAt: { type: Date, default: Date.now },
 });

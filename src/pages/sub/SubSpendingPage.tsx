@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatPkr } from "@/lib/currency";
 import { apiUrl } from "@/lib/apiBase";
@@ -35,7 +34,7 @@ export default function SubSpendingPage() {
       if (!r.ok) throw new Error();
       const data = await r.json();
       setRows(
-        data.map((x: { id: string; amount: number; reason: string; date: string; status: string; attachment?: string; category: string }) => ({
+        data.map((x: { id: string; amount: number; reason: string; date: string; status: string; attachment?: string }) => ({
           id: x.id,
           userId: "",
           userName: "Me",
@@ -44,7 +43,6 @@ export default function SubSpendingPage() {
           date: x.date,
           status: x.status as SpendingReceipt["status"],
           attachment: x.attachment,
-          category: x.category,
         })),
       );
     } catch {
@@ -172,7 +170,6 @@ export default function SubSpendingPage() {
                   <TableRow>
                     <TableHead>Amount</TableHead>
                     <TableHead>Reason</TableHead>
-                    <TableHead>Category</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Attachment</TableHead>
@@ -183,11 +180,6 @@ export default function SubSpendingPage() {
                     <TableRow key={s.id}>
                       <TableCell className="font-semibold">{formatPkr(s.amount)}</TableCell>
                       <TableCell className="max-w-[220px] truncate">{s.reason}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="border-0">
-                          {s.category}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="text-muted-foreground text-sm">{s.date}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={statusColors[s.status]}>
@@ -215,7 +207,7 @@ export default function SubSpendingPage() {
                   ))}
                   {rows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                         No receipts yet.
                       </TableCell>
                     </TableRow>

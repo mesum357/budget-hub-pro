@@ -4,7 +4,6 @@ import type { SpendingReceipt } from "@/data/mockData";
 import { FileText, Search, Filter } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -18,7 +17,6 @@ export default function SpendingsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -40,8 +38,6 @@ export default function SpendingsPage() {
     load();
   }, [load]);
 
-  const categories = Array.from(new Set(spendings.map((s) => s.category)));
-
   const previewUrl = useMemo(
     () => (previewAttachment ? apiUrl(`/uploads/${encodeURIComponent(previewAttachment)}`) : null),
     [previewAttachment],
@@ -51,8 +47,7 @@ export default function SpendingsPage() {
     const matchSearch =
       s.userName.toLowerCase().includes(search.toLowerCase()) || s.reason.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === "all" || s.status === statusFilter;
-    const matchCategory = categoryFilter === "all" || s.category === categoryFilter;
-    return matchSearch && matchStatus && matchCategory;
+    return matchSearch && matchStatus;
   });
 
   const statusColors: Record<string, string> = {
@@ -117,19 +112,6 @@ export default function SpendingsPage() {
                 <SelectItem value="rejected">Rejected</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </div>
 
@@ -147,7 +129,6 @@ export default function SpendingsPage() {
                     <TableHead>User</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Reason</TableHead>
-                    <TableHead>Category</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Attachment</TableHead>
@@ -160,11 +141,6 @@ export default function SpendingsPage() {
                       <TableCell className="font-medium">{s.userName}</TableCell>
                       <TableCell className="font-semibold">{formatPkr(s.amount)}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{s.reason}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="border-0">
-                          {s.category}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="text-muted-foreground text-sm">{s.date}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={statusColors[s.status]}>
@@ -206,7 +182,7 @@ export default function SpendingsPage() {
                   ))}
                   {filtered.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         No receipts found.
                       </TableCell>
                     </TableRow>

@@ -30,7 +30,6 @@ export interface SpendingReceipt {
   date: string;
   status: "pending" | "approved" | "rejected";
   attachment?: string;
-  category: string;
 }
 
 export interface MonthlyPoint {

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import type { UserListItem } from "@/data/mockData";
-import { Plus, Search, Upload, X, FileText, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Upload, X, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,23 +20,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { formatPkr } from "@/lib/currency";
 import { apiUrl } from "@/lib/apiBase";
-import { AttachmentPreviewDialog } from "@/components/AttachmentPreviewDialog";
-
-type ProfilePayload = {
-  user: UserListItem & { allottedBudget: number; walletBalance: number };
-  spendingHistory: {
-    id: string;
-    amount: number;
-    reason: string;
-    date: string;
-    status: string;
-    attachment?: string;
-  }[];
-};
+import { useNavigate } from "react-router-dom";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<UserListItem[]>([]);
@@ -53,12 +40,7 @@ export default function UsersPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const { toast } = useToast();
-
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [profile, setProfile] = useState<ProfilePayload | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const navigate = useNavigate();
 
   const [editOpen, setEditOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
@@ -96,27 +78,6 @@ export default function UsersPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const openProfile = async (userId: string) => {
-    setProfileOpen(true);
-    setProfile(null);
-    setProfileLoading(true);
-    try {
-      const r = await fetch(apiUrl(`/api/admin/users/${userId}/profile`), { credentials: "include" });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        toast({ title: "Could not load profile", description: data.error, variant: "destructive" });
-        setProfileOpen(false);
-        return;
-      }
-      setProfile(data as ProfilePayload);
-    } catch {
-      toast({ title: "Could not load profile", variant: "destructive" });
-      setProfileOpen(false);
-    } finally {
-      setProfileLoading(false);
-    }
-  };
 
   const filtered = users.filter(
     (u) =>
@@ -272,10 +233,6 @@ export default function UsersPage() {
         toast({ title: "Delete failed", description: data.error || "Try again", variant: "destructive" });
         return;
       }
-      if (profileOpen && profile?.user.id === userToDelete.id) {
-        setProfileOpen(false);
-        setProfile(null);
-      }
       setDeleteOpen(false);
       setUserToDelete(null);
       await load();
@@ -293,47 +250,9 @@ export default function UsersPage() {
     rejected: "bg-destructive/10 text-destructive border-0",
   };
 
-  const previewUrl = useMemo(
-    () => (previewAttachment ? apiUrl(`/uploads/${encodeURIComponent(previewAttachment)}`) : null),
-    [previewAttachment],
-  );
-
-  const spendingHistoryWithRemaining = useMemo(() => {
-    if (!profile) return [];
-
-    const rows = [...profile.spendingHistory].sort((a, b) => {
-      const ad = new Date(a.date).getTime();
-      const bd = new Date(b.date).getTime();
-      if (Number.isNaN(ad) && Number.isNaN(bd)) return 0;
-      if (Number.isNaN(ad)) return 1;
-      if (Number.isNaN(bd)) return -1;
-      return ad - bd;
-    });
-
-    const totalApproved = rows.reduce((sum, r) => (r.status === "approved" ? sum + (Number(r.amount) || 0) : sum), 0);
-    const startingBalance = (Number(profile.user.walletBalance) || 0) + totalApproved;
-
-    let runningApproved = 0;
-    return rows.map((r) => {
-      if (r.status === "approved") runningApproved += Number(r.amount) || 0;
-      const remainingBalance = startingBalance - runningApproved;
-      return { ...r, remainingBalance };
-    });
-  }, [profile]);
-
   return (
     <DashboardLayout title="Users">
       <div className="space-y-6">
-        <AttachmentPreviewDialog
-          open={previewOpen}
-          onOpenChange={(o) => {
-            setPreviewOpen(o);
-            if (!o) setPreviewAttachment(null);
-          }}
-          url={previewUrl}
-          filename={previewAttachment}
-        />
-
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -598,136 +517,6 @@ export default function UsersPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <Dialog
-          open={profileOpen}
-          onOpenChange={(o) => {
-            setProfileOpen(o);
-            if (!o) setProfile(null);
-          }}
-        >
-          <DialogContent className="left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100svh] max-w-none rounded-none p-0 overflow-hidden">
-            <div className="h-full flex flex-col">
-              <div className="border-b bg-background/95 supports-[backdrop-filter]:bg-background/80 supports-[backdrop-filter]:backdrop-blur px-4 sm:px-6 py-4 pr-14 sm:pr-16">
-                <DialogHeader className="space-y-0">
-                  <DialogTitle>User profile</DialogTitle>
-                </DialogHeader>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 sm:py-6">
-                {profileLoading && <p className="text-sm text-muted-foreground py-6">Loading profile…</p>}
-                {!profileLoading && profile && (
-                  <div className="space-y-6">
-                    <div className="flex flex-col md:flex-row gap-6 items-start">
-                      <Avatar className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl">
-                        {profile.user.avatar ? <AvatarImage src={profile.user.avatar} alt="" /> : null}
-                        <AvatarFallback className="rounded-2xl bg-primary/10 text-primary text-lg sm:text-xl font-semibold">
-                          {profile.user.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                          <div className="min-w-0">
-                            <h2 className="text-2xl font-semibold tracking-tight text-foreground truncate">
-                              {profile.user.name}
-                            </h2>
-                            <p className="text-sm text-muted-foreground truncate">{profile.user.email}</p>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <Badge variant="secondary">{profile.user.role}</Badge>
-                            <Badge
-                              variant={profile.user.status === "active" ? "default" : "secondary"}
-                              className={profile.user.status === "active" ? "bg-success/10 text-success border-0" : ""}
-                            >
-                              {profile.user.status}
-                            </Badge>
-                          </div>
-                        </div>
-
-                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                          <div className="rounded-xl border bg-card p-4 ui-card-interactive">
-                            <p className="text-xs text-muted-foreground">Wallet balance</p>
-                            <p className="text-2xl font-semibold tracking-tight mt-1">{formatPkr(profile.user.walletBalance)}</p>
-                          </div>
-                          <div className="rounded-xl border bg-card p-4 ui-card-interactive">
-                            <p className="text-xs text-muted-foreground">Allotted (cap)</p>
-                            <p className="text-2xl font-semibold tracking-tight mt-1">{formatPkr(profile.user.allottedBudget)}</p>
-                          </div>
-                        </div>
-
-                        <p className="text-xs text-muted-foreground mt-3">Joined {profile.user.createdAt}</p>
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    <div>
-                      <h3 className="text-sm font-medium text-foreground mb-2">Spending history</h3>
-                      <div className="h-[min(420px,58vh)] sm:h-[min(520px,55vh)] rounded-lg border bg-card overflow-y-auto">
-                        <Table className="min-w-[920px]">
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="whitespace-nowrap">Date</TableHead>
-                              <TableHead className="whitespace-nowrap">Amount</TableHead>
-                              <TableHead>Reason</TableHead>
-                              <TableHead className="whitespace-nowrap">Remaining balance</TableHead>
-                              <TableHead className="whitespace-nowrap">Status</TableHead>
-                              <TableHead className="whitespace-nowrap">Attachment</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {spendingHistoryWithRemaining.map((row) => (
-                              <TableRow key={row.id} className="hover:bg-muted/30 transition-colors">
-                                <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{row.date}</TableCell>
-                                <TableCell className="font-semibold whitespace-nowrap">{formatPkr(row.amount)}</TableCell>
-                                <TableCell className="max-w-[260px] truncate">{row.reason}</TableCell>
-                                <TableCell className="font-medium whitespace-nowrap">{formatPkr(row.remainingBalance)}</TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                  <Badge variant="secondary" className={`border-0 ${statusColors[row.status] ?? ""}`}>
-                                    {row.status}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                  {row.attachment ? (
-                                    <button
-                                      type="button"
-                                      className="inline-flex items-center gap-1 text-primary text-xs underline-offset-4 hover:underline transition-colors"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setPreviewAttachment(row.attachment ?? null);
-                                        setPreviewOpen(true);
-                                      }}
-                                    >
-                                      <FileText className="h-3.5 w-3.5" />
-                                      View
-                                    </button>
-                                  ) : (
-                                    <span className="text-muted-foreground text-sm">—</span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                            {spendingHistoryWithRemaining.length === 0 && (
-                              <TableRow>
-                                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
-                                  No receipts yet.
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading users…</p>
         ) : (
@@ -738,11 +527,11 @@ export default function UsersPage() {
                 role="button"
                 tabIndex={0}
                 className="ui-card-interactive animate-fade-in cursor-pointer ui-focus-ring hover:border-primary/30 overflow-hidden"
-                onClick={() => openProfile(user.id)}
+                onClick={() => navigate(`/users/${user.id}`)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    openProfile(user.id);
+                    navigate(`/users/${user.id}`);
                   }
                 }}
               >

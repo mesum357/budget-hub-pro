@@ -35,7 +35,6 @@ type ProfilePayload = {
     reason: string;
     date: string;
     status: string;
-    category: string;
     attachment?: string;
   }[];
 };
@@ -299,6 +298,29 @@ export default function UsersPage() {
     () => (previewAttachment ? apiUrl(`/uploads/${encodeURIComponent(previewAttachment)}`) : null),
     [previewAttachment],
   );
+
+  const spendingHistoryWithRemaining = useMemo(() => {
+    if (!profile) return [];
+
+    const rows = [...profile.spendingHistory].sort((a, b) => {
+      const ad = new Date(a.date).getTime();
+      const bd = new Date(b.date).getTime();
+      if (Number.isNaN(ad) && Number.isNaN(bd)) return 0;
+      if (Number.isNaN(ad)) return 1;
+      if (Number.isNaN(bd)) return -1;
+      return ad - bd;
+    });
+
+    const totalApproved = rows.reduce((sum, r) => (r.status === "approved" ? sum + (Number(r.amount) || 0) : sum), 0);
+    const startingBalance = (Number(profile.user.walletBalance) || 0) + totalApproved;
+
+    let runningApproved = 0;
+    return rows.map((r) => {
+      if (r.status === "approved") runningApproved += Number(r.amount) || 0;
+      const remainingBalance = startingBalance - runningApproved;
+      return { ...r, remainingBalance };
+    });
+  }, [profile]);
 
   return (
     <DashboardLayout title="Users">
@@ -646,62 +668,60 @@ export default function UsersPage() {
                     <div>
                       <h3 className="text-sm font-medium text-foreground mb-2">Spending history</h3>
                       <ScrollArea className="h-[min(420px,58vh)] sm:h-[min(520px,55vh)] rounded-lg border bg-card">
-                        <Table className="min-w-[980px]">
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Amount</TableHead>
-                              <TableHead>Reason</TableHead>
-                              <TableHead>Category</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Attachment</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {profile.spendingHistory.map((row) => (
-                              <TableRow key={row.id} className="hover:bg-muted/30 transition-colors">
-                                <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{row.date}</TableCell>
-                                <TableCell className="font-semibold">{formatPkr(row.amount)}</TableCell>
-                                <TableCell className="max-w-[220px] truncate">{row.reason}</TableCell>
-                                <TableCell>
-                                  <Badge variant="secondary" className="border-0 text-xs">
-                                    {row.category}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="secondary" className={`border-0 ${statusColors[row.status] ?? ""}`}>
-                                    {row.status}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  {row.attachment ? (
-                                    <button
-                                      type="button"
-                                      className="inline-flex items-center gap-1 text-primary text-xs underline-offset-4 hover:underline transition-colors"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setPreviewAttachment(row.attachment ?? null);
-                                        setPreviewOpen(true);
-                                      }}
-                                    >
-                                      <FileText className="h-3.5 w-3.5" />
-                                      View
-                                    </button>
-                                  ) : (
-                                    <span className="text-muted-foreground text-sm">—</span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                            {profile.spendingHistory.length === 0 && (
+                        <div className="w-full overflow-x-auto">
+                          <Table className="min-w-[920px]">
+                            <TableHeader>
                               <TableRow>
-                                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
-                                  No receipts yet.
-                                </TableCell>
+                                <TableHead className="whitespace-nowrap">Date</TableHead>
+                                <TableHead className="whitespace-nowrap">Amount</TableHead>
+                                <TableHead>Reason</TableHead>
+                                <TableHead className="whitespace-nowrap">Remaining balance</TableHead>
+                                <TableHead className="whitespace-nowrap">Status</TableHead>
+                                <TableHead className="whitespace-nowrap">Attachment</TableHead>
                               </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
+                            </TableHeader>
+                            <TableBody>
+                              {spendingHistoryWithRemaining.map((row) => (
+                                <TableRow key={row.id} className="hover:bg-muted/30 transition-colors">
+                                  <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{row.date}</TableCell>
+                                  <TableCell className="font-semibold whitespace-nowrap">{formatPkr(row.amount)}</TableCell>
+                                  <TableCell className="max-w-[260px] truncate">{row.reason}</TableCell>
+                                  <TableCell className="font-medium whitespace-nowrap">{formatPkr(row.remainingBalance)}</TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    <Badge variant="secondary" className={`border-0 ${statusColors[row.status] ?? ""}`}>
+                                      {row.status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {row.attachment ? (
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center gap-1 text-primary text-xs underline-offset-4 hover:underline transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setPreviewAttachment(row.attachment ?? null);
+                                          setPreviewOpen(true);
+                                        }}
+                                      >
+                                        <FileText className="h-3.5 w-3.5" />
+                                        View
+                                      </button>
+                                    ) : (
+                                      <span className="text-muted-foreground text-sm">—</span>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {spendingHistoryWithRemaining.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
+                                    No receipts yet.
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
                       </ScrollArea>
                     </div>
                   </div>

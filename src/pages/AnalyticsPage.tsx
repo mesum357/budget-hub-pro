@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { StatCard } from "@/components/StatCard";
-import { TrendingUp, DollarSign, PieChart as PieIcon, Users } from "lucide-react";
+import { TrendingUp, DollarSign, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart,
@@ -11,9 +11,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   Legend,
   Line,
   Area,
@@ -23,23 +20,12 @@ import type { MonthlyPoint } from "@/data/mockData";
 import { formatPkr, formatPkrAxis } from "@/lib/currency";
 import { apiUrl } from "@/lib/apiBase";
 
-const COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
-  "hsl(230 50% 70%)",
-];
-
 type AnalyticsPayload = {
   spendingByUser: { name: string; spent: number }[];
-  categoryData: { name: string; value: number }[];
   monthlySpendingData: MonthlyPoint[];
   totalSpent: number;
   avgSpend: number;
   topSpender: { name: string; spent: number };
-  categoryCount: number;
 };
 
 export default function AnalyticsPage() {
@@ -71,7 +57,7 @@ export default function AnalyticsPage() {
     );
   }
 
-  const { totalSpent, avgSpend, topSpender, categoryData, spendingByUser, monthlySpendingData, categoryCount } = data;
+  const { totalSpent, avgSpend, topSpender, spendingByUser, monthlySpendingData } = data;
 
   return (
     <DashboardLayout title="Analytics">
@@ -90,7 +76,6 @@ export default function AnalyticsPage() {
             icon={TrendingUp}
             trend={{ value: formatPkr(topSpender.spent), positive: false }}
           />
-          <StatCard title="Categories" value={String(categoryCount)} icon={PieIcon} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -122,46 +107,6 @@ export default function AnalyticsPage() {
                       />
                       <Bar dataKey="spent" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
                     </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="ui-card-interactive">
-            <CardHeader>
-              <CardTitle className="text-base">Spending by Category</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-72">
-                {categoryData.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-8 text-center">No categories yet.</p>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={categoryData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={3}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {categoryData.map((_, i) => (
-                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                        formatter={(v: number) => [formatPkr(v), ""]}
-                      />
-                    </PieChart>
                   </ResponsiveContainer>
                 )}
               </div>

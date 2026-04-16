@@ -11,9 +11,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   Legend,
   Line,
   Area,
@@ -23,18 +20,9 @@ import type { MonthlyPoint } from "@/data/mockData";
 import { formatPkr, formatPkrAxis } from "@/lib/currency";
 import { apiUrl } from "@/lib/apiBase";
 
-const COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
-];
-
 type Payload = {
   totalSpent: number;
   allottedBudget: number;
-  categoryData: { name: string; value: number }[];
   monthlySpendingData: MonthlyPoint[];
   spendingByUser: { name: string; spent: number }[];
 };
@@ -108,48 +96,6 @@ export default function SubAnalyticsPage() {
                     <Bar dataKey="spent" fill="hsl(var(--chart-1))" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="ui-card-interactive">
-            <CardHeader>
-              <CardTitle className="text-base">By category</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                {data.categoryData.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">No categories yet.</p>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={data.categoryData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
-                        paddingAngle={2}
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {data.categoryData.map((_, i) => (
-                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                        formatter={(v: number) => [formatPkr(v), ""]}
-                      />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
               </div>
             </CardContent>
           </Card>

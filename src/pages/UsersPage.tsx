@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { formatPkr } from "@/lib/currency";
@@ -667,62 +666,60 @@ export default function UsersPage() {
 
                     <div>
                       <h3 className="text-sm font-medium text-foreground mb-2">Spending history</h3>
-                      <ScrollArea className="h-[min(420px,58vh)] sm:h-[min(520px,55vh)] rounded-lg border bg-card">
-                        <div className="w-full overflow-x-auto">
-                          <Table className="min-w-[920px]">
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="whitespace-nowrap">Date</TableHead>
-                                <TableHead className="whitespace-nowrap">Amount</TableHead>
-                                <TableHead>Reason</TableHead>
-                                <TableHead className="whitespace-nowrap">Remaining balance</TableHead>
-                                <TableHead className="whitespace-nowrap">Status</TableHead>
-                                <TableHead className="whitespace-nowrap">Attachment</TableHead>
+                      <div className="h-[min(420px,58vh)] sm:h-[min(520px,55vh)] rounded-lg border bg-card overflow-auto">
+                        <Table className="min-w-[920px]">
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="whitespace-nowrap">Date</TableHead>
+                              <TableHead className="whitespace-nowrap">Amount</TableHead>
+                              <TableHead>Reason</TableHead>
+                              <TableHead className="whitespace-nowrap">Remaining balance</TableHead>
+                              <TableHead className="whitespace-nowrap">Status</TableHead>
+                              <TableHead className="whitespace-nowrap">Attachment</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {spendingHistoryWithRemaining.map((row) => (
+                              <TableRow key={row.id} className="hover:bg-muted/30 transition-colors">
+                                <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{row.date}</TableCell>
+                                <TableCell className="font-semibold whitespace-nowrap">{formatPkr(row.amount)}</TableCell>
+                                <TableCell className="max-w-[260px] truncate">{row.reason}</TableCell>
+                                <TableCell className="font-medium whitespace-nowrap">{formatPkr(row.remainingBalance)}</TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  <Badge variant="secondary" className={`border-0 ${statusColors[row.status] ?? ""}`}>
+                                    {row.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  {row.attachment ? (
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center gap-1 text-primary text-xs underline-offset-4 hover:underline transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPreviewAttachment(row.attachment ?? null);
+                                        setPreviewOpen(true);
+                                      }}
+                                    >
+                                      <FileText className="h-3.5 w-3.5" />
+                                      View
+                                    </button>
+                                  ) : (
+                                    <span className="text-muted-foreground text-sm">—</span>
+                                  )}
+                                </TableCell>
                               </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {spendingHistoryWithRemaining.map((row) => (
-                                <TableRow key={row.id} className="hover:bg-muted/30 transition-colors">
-                                  <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{row.date}</TableCell>
-                                  <TableCell className="font-semibold whitespace-nowrap">{formatPkr(row.amount)}</TableCell>
-                                  <TableCell className="max-w-[260px] truncate">{row.reason}</TableCell>
-                                  <TableCell className="font-medium whitespace-nowrap">{formatPkr(row.remainingBalance)}</TableCell>
-                                  <TableCell className="whitespace-nowrap">
-                                    <Badge variant="secondary" className={`border-0 ${statusColors[row.status] ?? ""}`}>
-                                      {row.status}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="whitespace-nowrap">
-                                    {row.attachment ? (
-                                      <button
-                                        type="button"
-                                        className="inline-flex items-center gap-1 text-primary text-xs underline-offset-4 hover:underline transition-colors"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setPreviewAttachment(row.attachment ?? null);
-                                          setPreviewOpen(true);
-                                        }}
-                                      >
-                                        <FileText className="h-3.5 w-3.5" />
-                                        View
-                                      </button>
-                                    ) : (
-                                      <span className="text-muted-foreground text-sm">—</span>
-                                    )}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                              {spendingHistoryWithRemaining.length === 0 && (
-                                <TableRow>
-                                  <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
-                                    No receipts yet.
-                                  </TableCell>
-                                </TableRow>
-                              )}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </ScrollArea>
+                            ))}
+                            {spendingHistoryWithRemaining.length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
+                                  No receipts yet.
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
                   </div>
                 )}

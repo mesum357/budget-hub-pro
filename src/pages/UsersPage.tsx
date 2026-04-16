@@ -666,7 +666,7 @@ export default function UsersPage() {
 
                     <div>
                       <h3 className="text-sm font-medium text-foreground mb-2">Spending history</h3>
-                      <div className="h-[min(420px,58vh)] sm:h-[min(520px,55vh)] rounded-lg border bg-card overflow-auto">
+                      <div className="h-[min(420px,58vh)] sm:h-[min(520px,55vh)] rounded-lg border bg-card overflow-y-auto">
                         <Table className="min-w-[920px]">
                           <TableHeader>
                             <TableRow>

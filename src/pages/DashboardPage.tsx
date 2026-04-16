@@ -74,7 +74,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card className="lg:col-span-2 shadow-sm">
+          <Card className="lg:col-span-2 ui-card-interactive">
             <CardHeader>
               <CardTitle className="text-base">Monthly spending vs allocated</CardTitle>
             </CardHeader>
@@ -106,7 +106,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm">
+          <Card className="ui-card-interactive">
             <CardHeader>
               <CardTitle className="text-base">Recent Activity</CardTitle>
             </CardHeader>

@@ -61,8 +61,8 @@ export function SubAppSidebar() {
                     <NavLink
                       to={item.url}
                       end
-                      className="hover:bg-sidebar-accent/60 transition-colors"
-                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                      className="relative rounded-md hover:bg-sidebar-accent/60 transition-[background-color,color,transform] duration-200 ease-out hover:translate-x-[2px]"
+                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-1 before:bottom-1 before:w-1 before:rounded-r before:bg-sidebar-primary"
                     >
                       <item.icon className="h-4 w-4" />
                       {!collapsed && <span>{item.title}</span>}

@@ -11,7 +11,7 @@ interface StatCardProps {
 
 export function StatCard({ title, value, icon: Icon, trend, className }: StatCardProps) {
   return (
-    <Card className={`animate-slide-up shadow-sm hover:shadow-md transition-shadow ${className ?? ""}`}>
+    <Card className={`animate-slide-up ui-card-interactive ${className ?? ""}`}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div className="space-y-1">

@@ -85,7 +85,7 @@ export default function LoginPage() {
         <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-primary/5 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-accent/5 blur-3xl" />
       </div>
-      <Card className="w-full max-w-md shadow-xl animate-scale-in relative z-10">
+      <Card className="w-full max-w-md shadow-xl animate-scale-in ui-hover-lift hover:shadow-2xl relative z-10">
         <CardHeader className="text-center space-y-4 pb-2">
           <div className="mx-auto h-14 w-14 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
             <Wallet className="h-7 w-7 text-primary-foreground" />
@@ -137,7 +137,7 @@ export default function LoginPage() {
                   Remember me
                 </Label>
               </div>
-              <button type="button" className="text-sm text-primary hover:underline">
+              <button type="button" className="text-sm text-primary underline-offset-4 hover:underline transition-colors">
                 Forgot password?
               </button>
             </div>

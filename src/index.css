@@ -55,6 +55,13 @@
     --chart-3: 280 60% 55%;
     --chart-4: 38 92% 50%;
     --chart-5: 0 72% 56%;
+
+    /* Motion tokens */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --dur-1: 120ms;
+    --dur-2: 180ms;
+    --dur-3: 260ms;
   }
 
   .dark {
@@ -114,9 +121,39 @@
   * {
     @apply border-border;
   }
+  html {
+    text-rendering: optimizeLegibility;
+  }
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer components {
+  .ui-focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background;
+  }
+
+  .ui-hover-lift {
+    @apply transition-[transform,box-shadow,border-color,background-color] duration-200 ease-out will-change-transform motion-reduce:transition-none motion-reduce:transform-none;
+    transition-timing-function: var(--ease-out);
+  }
+
+  .ui-hover-lift:hover {
+    transform: translateY(-2px);
+  }
+
+  .ui-hover-lift:active {
+    transform: translateY(-1px);
+  }
+
+  .ui-card-interactive {
+    @apply ui-hover-lift hover:shadow-md;
+  }
+
+  .ui-icon-button {
+    @apply ui-focus-ring rounded-md transition-colors;
   }
 }
 
@@ -129,6 +166,14 @@
   }
   .animate-scale-in {
     animation: scaleIn 0.3s ease-out forwards;
+  }
+
+  .animate-page-in {
+    animation: pageIn var(--dur-3) var(--ease-out) both;
+  }
+
+  .motion-safe-hover-lift {
+    @apply motion-safe:ui-hover-lift;
   }
 }
 
@@ -143,4 +188,9 @@
 @keyframes scaleIn {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); filter: saturate(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: saturate(1); }
 }

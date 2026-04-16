@@ -83,7 +83,7 @@ export default function BudgetsPage() {
 
   return (
     <DashboardLayout title="Budget Management">
-      <Card className="shadow-sm">
+      <Card className="ui-card-interactive">
         <CardHeader>
           <CardTitle className="text-base">User Budgets</CardTitle>
         </CardHeader>

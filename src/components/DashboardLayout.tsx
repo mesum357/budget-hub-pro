@@ -31,13 +31,13 @@ export function DashboardLayout({ children, title, mode = "admin" }: DashboardLa
       <div className="min-h-screen flex w-full">
         {isSub ? <SubAppSidebar /> : <AppSidebar />}
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-16 flex items-center justify-between border-b bg-card px-4 md:px-6 sticky top-0 z-10">
+          <header className="h-16 flex items-center justify-between border-b bg-card/95 supports-[backdrop-filter]:bg-card/80 supports-[backdrop-filter]:backdrop-blur px-4 md:px-6 sticky top-0 z-10">
             <div className="flex items-center gap-3">
               <SidebarTrigger />
               <h1 className="text-lg font-semibold text-foreground hidden sm:block">{title}</h1>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" className="relative">
+              <Button variant="ghost" size="icon" className="relative ui-icon-button hover:bg-accent/60">
                 <Bell className="h-5 w-5 text-muted-foreground" />
                 <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-destructive rounded-full" />
               </Button>
@@ -49,7 +49,7 @@ export function DashboardLayout({ children, title, mode = "admin" }: DashboardLa
               </div>
             </div>
           </header>
-          <main className="flex-1 p-4 md:p-6 overflow-auto">{children}</main>
+          <main className="flex-1 p-4 md:p-6 overflow-auto bg-background">{children}</main>
         </div>
       </div>
     </SidebarProvider>

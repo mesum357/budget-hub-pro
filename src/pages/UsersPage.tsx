@@ -606,7 +606,7 @@ export default function UsersPage() {
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm pt-1">
                       <span>
-                        <span className="text-muted-foreground">Wallet: </span>
+                        <span className="text-muted-foreground">Remaining budget: </span>
                         <span className="font-semibold">{formatPkr(profile.user.walletBalance)}</span>
                       </span>
                       <span>
@@ -760,7 +760,7 @@ export default function UsersPage() {
                     </Badge>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{user.role}</span>
+                    <span>Remaining: {formatPkr(user.walletBalance ?? 0)}</span>
                     <span>Joined {user.createdAt}</span>
                   </div>
                   <div

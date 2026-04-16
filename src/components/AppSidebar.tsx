@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Wallet, Receipt, BarChart3, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Wallet, Receipt, BarChart3, Settings, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,6 +24,7 @@ const navItems = [
   { title: "Budgets", url: "/budgets", icon: Wallet },
   { title: "Spendings", url: "/spendings", icon: Receipt },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
+  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {

@@ -486,6 +486,27 @@ async function main() {
     return res.json({ ok: true });
   });
 
+  app.patch("/api/admin/password", requireAdmin, async (req, res) => {
+    const currentPassword = String(req.body?.currentPassword || "");
+    const newPassword = String(req.body?.newPassword || "");
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current password and new password are required" });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "New password must be at least 6 characters" });
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ error: "New password must be different from your current password" });
+    }
+    const admin = await Admin.findById(req.session.adminId);
+    if (!admin) return res.status(401).json({ error: "Unauthorized" });
+    const ok = await bcrypt.compare(currentPassword, admin.passwordHash);
+    if (!ok) return res.status(401).json({ error: "Current password is incorrect" });
+    admin.passwordHash = await bcrypt.hash(newPassword, 10);
+    await admin.save();
+    return res.json({ ok: true });
+  });
+
   app.get("/api/admin/users", requireAdmin, async (_req, res) => {
     const list = await SubAdmin.find().sort({ createdAt: -1 }).lean();
     const rows = await Promise.all(

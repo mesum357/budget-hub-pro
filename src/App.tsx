@@ -12,6 +12,7 @@ import UserProfilePage from "./pages/UserProfilePage";
 import BudgetsPage from "./pages/BudgetsPage";
 import SpendingsPage from "./pages/SpendingsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import SubDashboardPage from "./pages/sub/SubDashboardPage";
 import SubSpendingPage from "./pages/sub/SubSpendingPage";
@@ -72,6 +73,14 @@ function AnimatedRoutes() {
           element={
             <RequireAdmin>
               <AnalyticsPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <RequireAdmin>
+              <SettingsPage />
             </RequireAdmin>
           }
         />

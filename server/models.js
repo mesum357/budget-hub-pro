@@ -14,6 +14,10 @@ const subAdminSchema = new mongoose.Schema({
   allottedBudget: { type: Number, default: 0 },
   walletBalance: { type: Number, default: 0 },
   avatarDataUrl: { type: String },
+  /** When set, the sub-admin is removed from the app UI but the document remains in MongoDB. */
+  deletedAt: { type: Date, default: null },
+  /** Original login email stored when soft-deleting (current `email` is replaced with a tombstone to satisfy uniqueness). */
+  deletedEmailOriginal: { type: String },
   createdAt: { type: Date, default: Date.now },
 });
 

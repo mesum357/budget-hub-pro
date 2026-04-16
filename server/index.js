@@ -46,8 +46,9 @@ function redactMongoUri(uri) {
 }
 
 async function remainingBudgetForUser(subAdminId) {
-  const u = await SubAdmin.findById(subAdminId).select("walletBalance").lean();
-  return Math.max(0, u?.walletBalance ?? 0);
+  const u = await SubAdmin.findById(subAdminId).select("walletBalance deletedAt").lean();
+  if (!u || u.deletedAt) return 0;
+  return Math.max(0, u.walletBalance ?? 0);
 }
 
 /** Single connection string (Atlas: Project → Connect → Drivers → copy `mongodb+srv://...`). */
@@ -75,9 +76,24 @@ function requireAdmin(req, res, next) {
 }
 
 function requireSub(req, res, next) {
-  if (req.session?.role === "subadmin" && req.session.subAdminId) return next();
-  return res.status(401).json({ error: "Unauthorized" });
+  if (req.session?.role !== "subadmin" || !req.session.subAdminId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  SubAdmin.findById(req.session.subAdminId)
+    .select("deletedAt status")
+    .lean()
+    .then((u) => {
+      if (!u || u.deletedAt || u.status !== "active") {
+        req.session.destroy(() => {});
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      next();
+    })
+    .catch(() => res.status(500).json({ error: "Unauthorized" }));
 }
+
+/** Sub-admins shown in the admin app (soft-deleted rows stay in MongoDB with `deletedAt` set). */
+const ACTIVE_SUBADMIN = { deletedAt: null };
 
 async function ensureAdminUser() {
   const existing = await Admin.findOne({ email: ADMIN_EMAIL });
@@ -102,7 +118,9 @@ function chartWindowStartUtc(monthsBack = 6) {
 async function backfillMissingAllotmentChanges() {
   const monthsBack = 6;
   const chartStart = chartWindowStartUtc(monthsBack);
-  const subs = await SubAdmin.find({ allottedBudget: { $gt: 0 } }).select("_id allottedBudget createdAt").lean();
+  const subs = await SubAdmin.find({ ...ACTIVE_SUBADMIN, allottedBudget: { $gt: 0 } })
+    .select("_id allottedBudget createdAt")
+    .lean();
   let added = 0;
   for (const u of subs) {
     const agg = await AllotmentChange.aggregate([
@@ -437,7 +455,7 @@ async function main() {
         return res.json({ role: "admin" });
       }
 
-      const user = await SubAdmin.findOne({ email, status: "active" });
+      const user = await SubAdmin.findOne({ email, status: "active", ...ACTIVE_SUBADMIN });
       if (user && (await bcrypt.compare(password, user.passwordHash))) {
         req.session.role = "subadmin";
         req.session.subAdminId = String(user._id);
@@ -463,7 +481,7 @@ async function main() {
     if (req.session?.role === "admin") return res.json({ role: "admin" });
     if (req.session?.role === "subadmin" && req.session.subAdminId) {
       const u = await SubAdmin.findById(req.session.subAdminId).lean();
-      if (!u || u.status !== "active") {
+      if (!u || u.status !== "active" || u.deletedAt) {
         req.session.destroy(() => {});
         return res.json({ role: null });
       }
@@ -508,7 +526,7 @@ async function main() {
   });
 
   app.get("/api/admin/users", requireAdmin, async (_req, res) => {
-    const list = await SubAdmin.find().sort({ createdAt: -1 }).lean();
+    const list = await SubAdmin.find(ACTIVE_SUBADMIN).sort({ createdAt: -1 }).lean();
     const rows = await Promise.all(
       list.map(async (u) => ({
         id: String(u._id),
@@ -528,7 +546,7 @@ async function main() {
 
   app.get("/api/admin/users/:id/profile", requireAdmin, async (req, res) => {
     const u = await SubAdmin.findById(req.params.id).lean();
-    if (!u) return res.status(404).json({ error: "User not found" });
+    if (!u || u.deletedAt) return res.status(404).json({ error: "User not found" });
     const oid = u._id;
     const receipts = await Receipt.find({ subAdminId: oid }).sort({ date: -1, createdAt: -1 }).limit(250).lean();
 
@@ -660,7 +678,7 @@ async function main() {
       }
       const oid = new mongoose.Types.ObjectId(req.params.id);
       const prev = await SubAdmin.findById(oid).lean();
-      if (!prev) return res.status(404).json({ error: "Not found" });
+      if (!prev || prev.deletedAt) return res.status(404).json({ error: "Not found" });
 
       const { name, email, role, roleLabel, status, password, avatar } = req.body || {};
       const setDoc = {};
@@ -673,7 +691,7 @@ async function main() {
       if (email !== undefined) {
         const em = String(email).toLowerCase().trim();
         if (!em) return res.status(400).json({ error: "Email cannot be empty" });
-        const clash = await SubAdmin.findOne({ email: em, _id: { $ne: oid } }).lean();
+        const clash = await SubAdmin.findOne({ email: em, _id: { $ne: oid }, ...ACTIVE_SUBADMIN }).lean();
         if (clash) return res.status(409).json({ error: "Email already in use" });
         setDoc.email = em;
       }
@@ -738,15 +756,17 @@ async function main() {
       const oid = new mongoose.Types.ObjectId(req.params.id);
       const existing = await SubAdmin.findById(oid).lean();
       if (!existing) return res.status(404).json({ error: "Not found" });
+      if (existing.deletedAt) return res.status(404).json({ error: "Not found" });
 
-      const receipts = await Receipt.find({ subAdminId: oid }).select("attachmentFilename").lean();
-      for (const r of receipts) {
-        if (r.attachmentFilename) fs.unlink(path.join(UPLOAD_DIR, r.attachmentFilename), () => {});
-      }
-      await Receipt.deleteMany({ subAdminId: oid });
-      await TopUp.deleteMany({ subAdminId: oid });
-      await AllotmentChange.deleteMany({ subAdminId: oid });
-      await SubAdmin.findByIdAndDelete(oid);
+      const tombstoneEmail = `removed-${oid.toString()}@account-removed.invalid`;
+      await SubAdmin.findByIdAndUpdate(oid, {
+        $set: {
+          deletedAt: new Date(),
+          deletedEmailOriginal: existing.deletedEmailOriginal || existing.email,
+          email: tombstoneEmail,
+          status: "inactive",
+        },
+      });
       res.json({ ok: true });
     } catch (e) {
       console.error(e);
@@ -762,7 +782,7 @@ async function main() {
     const amount = Number(req.body?.amount);
     const note = String(req.body?.note || "");
     if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: "Invalid amount" });
-    const u = await SubAdmin.findById(req.params.id);
+    const u = await SubAdmin.findOne({ _id: req.params.id, ...ACTIVE_SUBADMIN });
     if (!u) return res.status(404).json({ error: "User not found" });
     u.walletBalance += amount;
     await u.save();
@@ -774,7 +794,7 @@ async function main() {
   });
 
   app.get("/api/admin/budgets", requireAdmin, async (_req, res) => {
-    const users = await SubAdmin.find().lean();
+    const users = await SubAdmin.find(ACTIVE_SUBADMIN).lean();
     const out = [];
     for (const u of users) {
       const spent = await sumCommittedSpending(u._id);
@@ -794,9 +814,14 @@ async function main() {
   });
 
   app.get("/api/admin/receipts", requireAdmin, async (_req, res) => {
-    const rows = await Receipt.find().sort({ createdAt: -1 }).populate("subAdminId", "name").lean();
+    const rows = await Receipt.find()
+      .sort({ createdAt: -1 })
+      .populate({ path: "subAdminId", match: ACTIVE_SUBADMIN, select: "name" })
+      .lean();
     res.json(
-      rows.map((r) => ({
+      rows
+        .filter((r) => r.subAdminId)
+        .map((r) => ({
         id: String(r._id),
         userId: String(r.subAdminId?._id || r.subAdminId),
         userName: r.subAdminId?.name || "User",
@@ -828,34 +853,51 @@ async function main() {
   });
 
   app.get("/api/admin/dashboard", requireAdmin, async (_req, res) => {
-    const userCount = await SubAdmin.countDocuments();
+    const userCount = await SubAdmin.countDocuments(ACTIVE_SUBADMIN);
     const spentAgg = await Receipt.aggregate([
-      { $match: { status: { $in: ["pending", "approved"] } } },
+      {
+        $lookup: {
+          from: SubAdmin.collection.collectionName,
+          let: { sid: "$subAdminId" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$_id", "$$sid"] }, deletedAt: null } },
+          ],
+          as: "sub",
+        },
+      },
+      { $match: { "sub.0": { $exists: true }, status: { $in: ["pending", "approved"] } } },
       { $group: { _id: null, t: { $sum: "$amount" } } },
     ]);
     const totalSpent = spentAgg[0]?.t ?? 0;
-    const walletAgg = await SubAdmin.aggregate([{ $group: { _id: null, t: { $sum: "$walletBalance" } } }]);
+    const walletAgg = await SubAdmin.aggregate([
+      { $match: ACTIVE_SUBADMIN },
+      { $group: { _id: null, t: { $sum: "$walletBalance" } } },
+    ]);
     const totalWallet = walletAgg[0]?.t ?? 0;
     const totalAllotted = Math.round((totalWallet + totalSpent) * 100) / 100;
     const utilizationPct = totalAllotted > 0 ? Math.round((totalSpent / totalAllotted) * 100) : 0;
     const monthly = await buildMonthlySeries(6);
     const recent = await Receipt.find({ status: { $in: ["pending", "approved"] } })
       .sort({ createdAt: -1 })
-      .limit(8)
-      .populate("subAdminId", "name")
+      .limit(16)
+      .populate({ path: "subAdminId", match: ACTIVE_SUBADMIN, select: "name" })
       .lean();
+    const recentActivity = recent
+      .filter((item) => item.subAdminId)
+      .slice(0, 8)
+      .map((item) => ({
+        id: String(item._id),
+        userName: item.subAdminId?.name || "User",
+        reason: item.reason,
+        amount: item.amount,
+      }));
     res.json({
       totalUsers: userCount,
       totalAllotted,
       totalSpent,
       utilizationPct,
       monthlySpendingData: monthly,
-      recentActivity: recent.map((item) => ({
-        id: String(item._id),
-        userName: item.subAdminId?.name || "User",
-        reason: item.reason,
-        amount: item.amount,
-      })),
+      recentActivity,
     });
   });
 
@@ -865,8 +907,10 @@ async function main() {
       {
         $lookup: {
           from: SubAdmin.collection.collectionName,
-          localField: "subAdminId",
-          foreignField: "_id",
+          let: { sid: "$subAdminId" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$_id", "$$sid"] }, deletedAt: null } },
+          ],
           as: "u",
         },
       },

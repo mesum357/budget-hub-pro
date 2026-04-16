@@ -578,8 +578,8 @@ export default function UsersPage() {
               <AlertDialogDescription>
                 {userToDelete ? (
                   <>
-                    This will permanently remove <span className="font-medium text-foreground">{userToDelete.name}</span> and all of
-                    their receipts and wallet top-ups. This cannot be undone.
+                    This will remove <span className="font-medium text-foreground">{userToDelete.name}</span> from the app. Their
+                    account record, receipts, and top-ups stay in the database for audit purposes, but they can no longer sign in.
                   </>
                 ) : null}
               </AlertDialogDescription>

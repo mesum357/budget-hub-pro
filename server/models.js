@@ -61,3 +61,4 @@ export async function sumCommittedSpending(subAdminId) {
   ]);
   return res[0]?.total ?? 0;
 }
+``

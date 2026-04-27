@@ -333,7 +333,8 @@ async function main() {
   await ensureAdminUser();
 
   const app = express();
-  app.set("trust proxy", 1);
+  // Render can sit behind multiple proxies; trusting all forwarded headers is safer for secure-cookie detection.
+  app.set("trust proxy", true);
 
   /** Collect allowed browser origins (comma-separated in each var). */
   function parseOriginList() {
@@ -493,6 +494,21 @@ async function main() {
         req.session.adminId = String(admin._id);
         delete req.session.subAdminId;
         if (ios) {
+          req.session.save((saveErr) => {
+            if (saveErr) {
+              console.error("[ios][auth/login] session save failed", {
+                ...requestMeta(req),
+                error: String(saveErr?.message || saveErr),
+              });
+            }
+            console.log("[ios][auth/login] cookie issue probe", {
+              xfProto: req.get("x-forwarded-proto") || null,
+              reqSecure: req.secure,
+              hasSetCookieHeader: Boolean(res.getHeader("set-cookie")),
+            });
+          });
+        }
+        if (ios) {
           console.log("[ios][auth/login] admin login success", {
             ...requestMeta(req),
             email,
@@ -506,6 +522,21 @@ async function main() {
         req.session.role = "subadmin";
         req.session.subAdminId = String(user._id);
         delete req.session.adminId;
+        if (ios) {
+          req.session.save((saveErr) => {
+            if (saveErr) {
+              console.error("[ios][auth/login] session save failed", {
+                ...requestMeta(req),
+                error: String(saveErr?.message || saveErr),
+              });
+            }
+            console.log("[ios][auth/login] cookie issue probe", {
+              xfProto: req.get("x-forwarded-proto") || null,
+              reqSecure: req.secure,
+              hasSetCookieHeader: Boolean(res.getHeader("set-cookie")),
+            });
+          });
+        }
         if (ios) {
           console.log("[ios][auth/login] subadmin login success", {
             ...requestMeta(req),

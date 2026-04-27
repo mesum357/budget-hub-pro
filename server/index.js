@@ -45,6 +45,28 @@ function redactMongoUri(uri) {
   return String(uri).replace(/(mongodb(?:\+srv)?:\/\/)([^:]+):[^@]+@/, "$1$2:***@");
 }
 
+function isIosClient(req) {
+  const ua = String(req.get("user-agent") || "").toLowerCase();
+  return /iphone|ipad|ipod|ios|crios|fxios/.test(ua);
+}
+
+function requestMeta(req) {
+  return {
+    method: req.method,
+    path: req.originalUrl,
+    origin: req.get("origin") || null,
+    referer: req.get("referer") || null,
+    host: req.get("host") || null,
+    ua: req.get("user-agent") || null,
+    hasCookieHeader: Boolean(req.get("cookie")),
+    hasSession: Boolean(req.session),
+    sessionId: req.sessionID || null,
+    role: req.session?.role || null,
+    subAdminId: req.session?.subAdminId || null,
+    adminId: req.session?.adminId || null,
+  };
+}
+
 async function remainingBudgetForUser(subAdminId) {
   const u = await SubAdmin.findById(subAdminId).select("walletBalance deletedAt").lean();
   if (!u || u.deletedAt) return 0;
@@ -369,6 +391,12 @@ async function main() {
   app.use(corsMiddleware());
   app.use(express.json({ limit: "6mb" }));
   app.use("/uploads", express.static(UPLOAD_DIR));
+  app.use((req, _res, next) => {
+    if (isIosClient(req)) {
+      console.log("[ios][request]", requestMeta(req));
+    }
+    next();
+  });
 
   /**
    * SPA on another host (e.g. two Render URLs) needs SameSite=None; Secure or the session cookie
@@ -444,9 +472,16 @@ async function main() {
       },
     }),
   );
+  console.log("[session] Cookie config:", {
+    sameSite: crossSiteSession || preferNoneCookie ? "none" : "lax",
+    secure: cookieSecure,
+    crossSiteSession,
+    preferNoneCookie,
+  });
 
   app.post("/api/auth/login", async (req, res) => {
     res.set("Cache-Control", "no-store");
+    const ios = isIosClient(req);
     try {
       const email = String(req.body?.email || "").toLowerCase().trim();
       const password = String(req.body?.password || "");
@@ -457,6 +492,12 @@ async function main() {
         req.session.role = "admin";
         req.session.adminId = String(admin._id);
         delete req.session.subAdminId;
+        if (ios) {
+          console.log("[ios][auth/login] admin login success", {
+            ...requestMeta(req),
+            email,
+          });
+        }
         return res.json({ role: "admin" });
       }
 
@@ -465,14 +506,32 @@ async function main() {
         req.session.role = "subadmin";
         req.session.subAdminId = String(user._id);
         delete req.session.adminId;
+        if (ios) {
+          console.log("[ios][auth/login] subadmin login success", {
+            ...requestMeta(req),
+            email,
+          });
+        }
         return res.json({
           role: "subadmin",
           user: { id: String(user._id), name: user.name, email: user.email },
         });
       }
 
+      if (ios) {
+        console.warn("[ios][auth/login] invalid credentials", {
+          ...requestMeta(req),
+          email,
+        });
+      }
       return res.status(401).json({ error: "Invalid credentials" });
     } catch (e) {
+      if (ios) {
+        console.error("[ios][auth/login] error", {
+          ...requestMeta(req),
+          error: String(e?.message || e),
+        });
+      }
       console.error(e);
       return res.status(500).json({ error: "Login failed" });
     }
@@ -484,10 +543,17 @@ async function main() {
 
   app.get("/api/auth/me", async (req, res) => {
     res.set("Cache-Control", "no-store");
+    const ios = isIosClient(req);
+    if (ios) {
+      console.log("[ios][auth/me] request", requestMeta(req));
+    }
     if (req.session?.role === "admin") return res.json({ role: "admin" });
     if (req.session?.role === "subadmin" && req.session.subAdminId) {
       const u = await SubAdmin.findById(req.session.subAdminId).lean();
       if (!u || u.status !== "active" || u.deletedAt) {
+        if (ios) {
+          console.warn("[ios][auth/me] subadmin session invalidated", requestMeta(req));
+        }
         req.session.destroy(() => {});
         return res.json({ role: null });
       }
@@ -495,6 +561,9 @@ async function main() {
         role: "subadmin",
         user: { id: String(u._id), name: u.name, email: u.email },
       });
+    }
+    if (ios) {
+      console.warn("[ios][auth/me] no active session", requestMeta(req));
     }
     return res.json({ role: null });
   });

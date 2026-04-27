@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -13,16 +14,21 @@ import BudgetsPage from "./pages/BudgetsPage";
 import SpendingsPage from "./pages/SpendingsPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import SettingsPage from "./pages/SettingsPage";
+import DebugConsolePage from "./pages/DebugConsolePage";
 import NotFound from "./pages/NotFound";
 import SubDashboardPage from "./pages/sub/SubDashboardPage";
 import SubSpendingPage from "./pages/sub/SubSpendingPage";
 import SubAnalyticsPage from "./pages/sub/SubAnalyticsPage";
 import SubWalletPage from "./pages/sub/SubWalletPage";
+import { initDebugConsoleCapture } from "./lib/debugConsole";
 
 const queryClient = new QueryClient();
 
 function AnimatedRoutes() {
   const location = useLocation();
+  useEffect(() => {
+    initDebugConsoleCapture();
+  }, []);
 
   return (
     <div key={location.key} className="animate-page-in">
@@ -85,6 +91,14 @@ function AnimatedRoutes() {
           }
         />
         <Route
+          path="/debug"
+          element={
+            <RequireAdmin>
+              <DebugConsolePage mode="admin" />
+            </RequireAdmin>
+          }
+        />
+        <Route
           path="/sub/dashboard"
           element={
             <RequireSub>
@@ -113,6 +127,14 @@ function AnimatedRoutes() {
           element={
             <RequireSub>
               <SubWalletPage />
+            </RequireSub>
+          }
+        />
+        <Route
+          path="/sub/debug"
+          element={
+            <RequireSub>
+              <DebugConsolePage mode="sub" />
             </RequireSub>
           }
         />

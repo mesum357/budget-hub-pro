@@ -1,6 +1,7 @@
-import { LayoutDashboard, Receipt, BarChart3, Wallet, LogOut } from "lucide-react";
+import { LayoutDashboard, Receipt, BarChart3, Wallet, Bug, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,6 +21,7 @@ const navItems = [
   { title: "Spending", url: "/sub/spending", icon: Receipt },
   { title: "Analytics", url: "/sub/analytics", icon: BarChart3 },
   { title: "Wallet", url: "/sub/wallet", icon: Wallet },
+  { title: "Debug", url: "/sub/debug", icon: Bug, mobileOnly: true },
 ];
 
 export function SubAppSidebar() {
@@ -28,12 +30,23 @@ export function SubAppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false,
+  );
 
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
     await logout();
     navigate("/");
   };
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   return (
     <Sidebar collapsible="icon">
@@ -55,7 +68,9 @@ export function SubAppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {navItems
+                .filter((item) => !item.mobileOnly || isMobile)
+                .map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location.pathname === item.url} tooltip={item.title} size="lg">
                     <NavLink

@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Wallet, Receipt, BarChart3, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Wallet, Receipt, BarChart3, Settings, Bug, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -25,6 +25,7 @@ const navItems = [
   { title: "Spendings", url: "/spendings", icon: Receipt },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Debug", url: "/debug", icon: Bug, mobileOnly: true },
 ];
 
 export function AppSidebar() {
@@ -34,6 +35,9 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [pendingReceipts, setPendingReceipts] = useState<number>(0);
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false,
+  );
 
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -58,6 +62,14 @@ export function AppSidebar() {
     const t = window.setInterval(() => void loadSidebarCounts(), 30_000);
     return () => window.clearInterval(t);
   }, [loadSidebarCounts]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   const badgesByUrl = useMemo(() => {
     return {
@@ -85,7 +97,9 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {navItems
+                .filter((item) => !item.mobileOnly || isMobile)
+                .map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild

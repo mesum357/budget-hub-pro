@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { apiUrl } from "@/lib/apiBase";
+import { setAuthToken } from "@/lib/authToken";
 
 export type MeState =
   | { role: "admin" }
@@ -63,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include", cache: "no-store" });
+    setAuthToken(null);
     setMe(null);
     setLoading(false);
   }, []);

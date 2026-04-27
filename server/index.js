@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { Admin, SubAdmin, Receipt, TopUp, AllotmentChange, sumCommittedSpending } from "./models.js";
 
@@ -67,6 +68,67 @@ function requestMeta(req) {
   };
 }
 
+function base64UrlEncode(value) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function base64UrlDecode(value) {
+  return Buffer.from(value, "base64url").toString("utf8");
+}
+
+function signAuthToken(payload) {
+  const body = base64UrlEncode(JSON.stringify(payload));
+  const sig = crypto.createHmac("sha256", TOKEN_SECRET).update(body).digest("base64url");
+  return `${body}.${sig}`;
+}
+
+function verifyAuthToken(token) {
+  if (!token || typeof token !== "string" || !token.includes(".")) return null;
+  const [body, sig] = token.split(".");
+  if (!body || !sig) return null;
+  const expected = crypto.createHmac("sha256", TOKEN_SECRET).update(body).digest("base64url");
+  if (sig !== expected) return null;
+  try {
+    const payload = JSON.parse(base64UrlDecode(body));
+    if (!payload?.exp || Date.now() > Number(payload.exp)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function getBearerToken(req) {
+  const auth = String(req.get("authorization") || "");
+  if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
+  const xToken = String(req.get("x-auth-token") || "").trim();
+  return xToken || null;
+}
+
+async function resolveAuth(req) {
+  if (req.session?.role === "admin" && req.session.adminId) {
+    return { role: "admin", adminId: String(req.session.adminId), via: "session" };
+  }
+  if (req.session?.role === "subadmin" && req.session.subAdminId) {
+    const u = await SubAdmin.findById(req.session.subAdminId).select("deletedAt status").lean();
+    if (u && !u.deletedAt && u.status === "active") {
+      return { role: "subadmin", subAdminId: String(req.session.subAdminId), via: "session" };
+    }
+  }
+  const token = getBearerToken(req);
+  const payload = verifyAuthToken(token);
+  if (!payload) return null;
+  if (payload.role === "admin" && payload.adminId) {
+    return { role: "admin", adminId: String(payload.adminId), via: "token" };
+  }
+  if (payload.role === "subadmin" && payload.subAdminId) {
+    const u = await SubAdmin.findById(payload.subAdminId).select("deletedAt status").lean();
+    if (u && !u.deletedAt && u.status === "active") {
+      return { role: "subadmin", subAdminId: String(payload.subAdminId), via: "token" };
+    }
+  }
+  return null;
+}
+
 async function remainingBudgetForUser(subAdminId) {
   const u = await SubAdmin.findById(subAdminId).select("walletBalance deletedAt").lean();
   if (!u || u.deletedAt) return 0;
@@ -80,6 +142,8 @@ const SESSION_SECRET = process.env.SESSION_SECRET || "dev-secret-change-me";
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "admin@company.com").toLowerCase();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 const UPLOAD_DIR = path.join(__dirname, "uploads");
+const TOKEN_SECRET = process.env.AUTH_TOKEN_SECRET || SESSION_SECRET;
+const AUTH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -92,26 +156,37 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 8 * 1024 * 1024 } });
 
-function requireAdmin(req, res, next) {
-  if (req.session?.role === "admin") return next();
-  return res.status(401).json({ error: "Unauthorized" });
+async function requireAdmin(req, res, next) {
+  try {
+    const auth = await resolveAuth(req);
+    if (auth?.role === "admin" && auth.adminId) {
+      req.auth = auth;
+      req.session.role = "admin";
+      req.session.adminId = auth.adminId;
+      delete req.session.subAdminId;
+      return next();
+    }
+    return res.status(401).json({ error: "Unauthorized" });
+  } catch {
+    return res.status(500).json({ error: "Unauthorized" });
+  }
 }
 
-function requireSub(req, res, next) {
-  if (req.session?.role !== "subadmin" || !req.session.subAdminId) {
+async function requireSub(req, res, next) {
+  try {
+    const auth = await resolveAuth(req);
+    if (auth?.role === "subadmin" && auth.subAdminId) {
+      req.auth = auth;
+      req.session.role = "subadmin";
+      req.session.subAdminId = auth.subAdminId;
+      delete req.session.adminId;
+      return next();
+    }
+    req.session.destroy(() => {});
     return res.status(401).json({ error: "Unauthorized" });
+  } catch {
+    return res.status(500).json({ error: "Unauthorized" });
   }
-  SubAdmin.findById(req.session.subAdminId)
-    .select("deletedAt status")
-    .lean()
-    .then((u) => {
-      if (!u || u.deletedAt || u.status !== "active") {
-        req.session.destroy(() => {});
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-      next();
-    })
-    .catch(() => res.status(500).json({ error: "Unauthorized" }));
 }
 
 /** Sub-admins shown in the admin app (soft-deleted rows stay in MongoDB with `deletedAt` set). */
@@ -493,6 +568,11 @@ async function main() {
         req.session.role = "admin";
         req.session.adminId = String(admin._id);
         delete req.session.subAdminId;
+        const authToken = signAuthToken({
+          role: "admin",
+          adminId: String(admin._id),
+          exp: Date.now() + AUTH_TOKEN_TTL_MS,
+        });
         if (ios) {
           req.session.save((saveErr) => {
             if (saveErr) {
@@ -514,7 +594,7 @@ async function main() {
             email,
           });
         }
-        return res.json({ role: "admin" });
+        return res.json({ role: "admin", authToken });
       }
 
       const user = await SubAdmin.findOne({ email, status: "active", ...ACTIVE_SUBADMIN });
@@ -522,6 +602,11 @@ async function main() {
         req.session.role = "subadmin";
         req.session.subAdminId = String(user._id);
         delete req.session.adminId;
+        const authToken = signAuthToken({
+          role: "subadmin",
+          subAdminId: String(user._id),
+          exp: Date.now() + AUTH_TOKEN_TTL_MS,
+        });
         if (ios) {
           req.session.save((saveErr) => {
             if (saveErr) {
@@ -545,6 +630,7 @@ async function main() {
         }
         return res.json({
           role: "subadmin",
+          authToken,
           user: { id: String(user._id), name: user.name, email: user.email },
         });
       }
@@ -578,9 +664,10 @@ async function main() {
     if (ios) {
       console.log("[ios][auth/me] request", requestMeta(req));
     }
-    if (req.session?.role === "admin") return res.json({ role: "admin" });
-    if (req.session?.role === "subadmin" && req.session.subAdminId) {
-      const u = await SubAdmin.findById(req.session.subAdminId).lean();
+    const auth = await resolveAuth(req);
+    if (auth?.role === "admin" && auth.adminId) return res.json({ role: "admin" });
+    if (auth?.role === "subadmin" && auth.subAdminId) {
+      const u = await SubAdmin.findById(auth.subAdminId).lean();
       if (!u || u.status !== "active" || u.deletedAt) {
         if (ios) {
           console.warn("[ios][auth/me] subadmin session invalidated", requestMeta(req));

@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { apiUrl } from "@/lib/apiBase";
+import { setAuthToken } from "@/lib/authToken";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -50,6 +51,7 @@ export default function LoginPage() {
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
+        setAuthToken(null);
         toast({
           title: "Sign in failed",
           description: data.error || "Invalid credentials",
@@ -58,10 +60,12 @@ export default function LoginPage() {
         return;
       }
       if (data.role === "admin") {
+        setAuthToken(typeof data.authToken === "string" ? data.authToken : null);
         setFromLogin({ role: "admin" });
         toast({ title: "Welcome back!", description: "Signed in as administrator." });
         navigate("/dashboard");
       } else if (data.role === "subadmin" && data.user) {
+        setAuthToken(typeof data.authToken === "string" ? data.authToken : null);
         setFromLogin({ role: "subadmin", user: data.user });
         toast({ title: "Welcome!", description: `Signed in as ${data.user.name}.` });
         navigate("/sub/dashboard");

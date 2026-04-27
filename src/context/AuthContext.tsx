@@ -19,14 +19,32 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<MeState>(null);
   const [loading, setLoading] = useState(true);
+  const setFromLogin = useCallback((m: MeState) => {
+    setMe(m);
+    setLoading(false);
+  }, []);
 
   const refresh = useCallback(async () => {
-    const r = await fetch(apiUrl("/api/auth/me"), { credentials: "include" });
-    const data = await r.json();
-    if (!data?.role) setMe(null);
-    else if (data.role === "admin") setMe({ role: "admin" });
-    else if (data.role === "subadmin" && data.user) setMe({ role: "subadmin", user: data.user });
-    else setMe(null);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
+    try {
+      const r = await fetch(apiUrl("/api/auth/me"), {
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Cache-Control": "no-store", Pragma: "no-cache" },
+        signal: controller.signal,
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok || !data?.role) setMe(null);
+      else if (data.role === "admin") setMe({ role: "admin" });
+      else if (data.role === "subadmin" && data.user) setMe({ role: "subadmin", user: data.user });
+      else setMe(null);
+    } catch {
+      // Fail closed: never leave route guards in loading on network/WebKit fetch quirks.
+      setMe(null);
+    } finally {
+      window.clearTimeout(timeout);
+    }
   }, []);
 
   useEffect(() => {
@@ -44,13 +62,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const logout = useCallback(async () => {
-    await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" });
+    await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include", cache: "no-store" });
     setMe(null);
+    setLoading(false);
   }, []);
 
   const value = useMemo(
-    () => ({ me, loading, refresh, logout, setFromLogin: setMe }),
-    [me, loading, refresh, logout],
+    () => ({ me, loading, refresh, logout, setFromLogin }),
+    [me, loading, refresh, logout, setFromLogin],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

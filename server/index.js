@@ -415,6 +415,10 @@ async function main() {
   }
 
   const crossSiteSession = useCrossSiteSessionCookie();
+  const explicitSameSite = process.env.SESSION_SAME_SITE?.trim().toLowerCase();
+  // iOS WebKit can behave inconsistently with Lax in production app shells;
+  // on Render, prefer None+Secure unless explicitly forced to lax.
+  const preferNoneCookie = process.env.RENDER === "true" && explicitSameSite !== "lax";
   if (crossSiteSession) {
     console.log("[session] SameSite=None; Secure (cross-origin SPA ↔ API)");
   }
@@ -434,7 +438,7 @@ async function main() {
       store: MongoStore.create({ mongoUrl: MONGODB_URI, ttl: 60 * 60 * 24 * 7 }),
       cookie: {
         httpOnly: true,
-        sameSite: crossSiteSession ? "none" : "lax",
+        sameSite: crossSiteSession || preferNoneCookie ? "none" : "lax",
         secure: cookieSecure,
         maxAge: 7 * 24 * 60 * 60 * 1000,
       },
@@ -442,6 +446,7 @@ async function main() {
   );
 
   app.post("/api/auth/login", async (req, res) => {
+    res.set("Cache-Control", "no-store");
     try {
       const email = String(req.body?.email || "").toLowerCase().trim();
       const password = String(req.body?.password || "");
@@ -478,6 +483,7 @@ async function main() {
   });
 
   app.get("/api/auth/me", async (req, res) => {
+    res.set("Cache-Control", "no-store");
     if (req.session?.role === "admin") return res.json({ role: "admin" });
     if (req.session?.role === "subadmin" && req.session.subAdminId) {
       const u = await SubAdmin.findById(req.session.subAdminId).lean();

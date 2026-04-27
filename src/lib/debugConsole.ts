@@ -1,4 +1,4 @@
-type DebugLevel = "log" | "warn" | "error" | "info";
+type DebugLevel = "log" | "warn" | "error" | "info" | "debug";
 
 export type DebugEntry = {
   id: string;
@@ -9,7 +9,7 @@ export type DebugEntry = {
 
 const STORE_KEY = "__budget_debug_console_store__";
 const INIT_KEY = "__budget_debug_console_inited__";
-const MAX_ENTRIES = 400;
+const MAX_ENTRIES = 5000;
 
 type DebugStore = {
   entries: DebugEntry[];
@@ -23,7 +23,7 @@ function stringifyArg(arg: unknown): string {
   if (typeof arg === "string") return arg;
   if (arg instanceof Error) return `${arg.name}: ${arg.message}\n${arg.stack || ""}`.trim();
   try {
-    return JSON.stringify(arg);
+    return JSON.stringify(arg, null, 2);
   } catch {
     return String(arg);
   }
@@ -74,6 +74,7 @@ export function initDebugConsoleCapture() {
     warn: console.warn.bind(console),
     error: console.error.bind(console),
     info: console.info.bind(console),
+    debug: console.debug.bind(console),
   };
 
   console.log = (...args: unknown[]) => {
@@ -91,6 +92,10 @@ export function initDebugConsoleCapture() {
   console.info = (...args: unknown[]) => {
     push("info", args);
     original.info(...args);
+  };
+  console.debug = (...args: unknown[]) => {
+    push("debug", args);
+    original.debug(...args);
   };
 
   window.addEventListener("error", (event) => {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bug, Trash2, Copy } from "lucide-react";
+import { Bug, Trash2, Copy, Download } from "lucide-react";
 import { clearDebugEntries, getDebugEntries, subscribeDebugEntries, type DebugEntry } from "@/lib/debugConsole";
 
 type Props = {
@@ -13,6 +13,7 @@ const levelClass: Record<string, string> = {
   error: "text-destructive",
   warn: "text-warning",
   info: "text-info",
+  debug: "text-info",
   log: "text-foreground",
 };
 
@@ -31,6 +32,18 @@ export default function DebugConsolePage({ mode }: Props) {
   }, []);
 
   const logText = useMemo(() => entries.map(fmt).join("\n"), [entries]);
+  const exportLogs = () => {
+    const blob = new Blob([logText || "(no logs)"], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    a.href = url;
+    a.download = `debug-console-${mode}-${ts}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const copyLogs = async () => {
     try {
@@ -66,6 +79,10 @@ export default function DebugConsolePage({ mode }: Props) {
                   <Copy className="h-4 w-4 mr-1" />
                   {copied ? "Copied" : "Copy"}
                 </Button>
+                <Button type="button" variant="outline" size="sm" onClick={exportLogs}>
+                  <Download className="h-4 w-4 mr-1" />
+                  Export
+                </Button>
                 <Button type="button" variant="destructive" size="sm" onClick={clearDebugEntries}>
                   <Trash2 className="h-4 w-4 mr-1" />
                   Clear
@@ -75,6 +92,7 @@ export default function DebugConsolePage({ mode }: Props) {
             <CardDescription>
               Captures <code>console.log/warn/error/info</code>, runtime errors, and unhandled promise rejections in this browser tab.
             </CardDescription>
+            <CardDescription>Total entries: {entries.length}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border bg-muted/20 p-3">
